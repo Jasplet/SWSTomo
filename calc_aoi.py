@@ -8,8 +8,10 @@
 
 import numpy as np
 from obspy.taup import TauPyModel
+from ak135 import ak135_original
+from scipy.interpolate import pchip_interpolate
 
-def get_rayparam(ph,evdp,dist):
+def get_rayparam(evdp,dist,ph):
     '''
     Use obspy TauP to get the ray parameter for each phase to then get the aoi
     ph [str] - the phase code (SKS or SKKS)
@@ -17,39 +19,32 @@ def get_rayparam(ph,evdp,dist):
     dist - the distancefrom source to reciever (for the whole path) [deg]
     '''
     model = TauPyModel('ak135')
-    arrival = model.get_travel_times(source_depth_in_km=evdp, distance_in_degree=dist, phaselist=[ph])
-    rp = arrival[0].ray_param # Rap paramter in s/deg
+    arrival = model.get_travel_times(source_depth_in_km=evdp, distance_in_degree=dist, phase_list=[ph])
+    rp = arrival[0].ray_param # Rap paramter in s/rad
     return rp
 
-def slw2aoi(slw,depth,phase):
+def slw2aoi(depth,evdp,gcarc,phase,wave='s'):
+    '''
+    Ported (and simplified) version of slw2aoi.m function.
+    Phase [str] - should either by 's' or 'p'
+    '''
+    V=ak135_original()
+    slw = get_rayparam(evdp,gcarc,phase)
+    RE = 6371.0 # [km] earth radii
+    if wave == 'p':
+        vel = V[:,1] # p-wave velocity
+    else:
+        vel = V[:,2] # s-wave velocity
 
-  narg = nargin ;
-  A=ak135;
+    akdepth = V[:,0]
+    # v=interp1(akdepth,vel,depth,'pchip')
+    v = pchip_interpolate(akdepth,vel,depth)
 
-  if narg < 1
-     fprintf('ERROR: Need at least 1 argument for slw2aoi.\n') ;
-  elseif narg == 1
-     depth = 0;
-     vel = A(:,3);
-  elseif narg == 2
-     vel = A(:,3);
-  elseif narg == 3
-     if strcmpi(phase,'p')
-     vel = A(:,2);
-     else
-     vel = A(:,3);
-     end
-  end
-  akdepth = A(:,1) ;
-  RE = 6371.0 ;
-  v=interp1(akdepth,vel,depth,'pchip') ;
+    # psperkm = slw / 111.16
+    # aoi = np.arcsin( psperkm /  (1/v))
+    # prad = slw / (np.pi/180) -- DONT need to do this as it is done in Obspy
+    tmp = slw*v / (RE-depth)
+    # print(tmp)
+    aoi = np.degrees(np.arcsin(tmp))
 
-  psperkm = slw / 111.16 ;
-
-  aoi = asind ( psperkm / (1/v)) ;
-
-
-  prad = slw / (pi/180) ;
-  tmp = prad*v / (RE-depth) ;
-  aoi = asind (tmp) ;
-  return aoi
+    return aoi
