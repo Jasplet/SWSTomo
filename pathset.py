@@ -18,7 +18,26 @@ import os
 from pathlib import Path
 from shutil import copy
 import glob
+from calc_aoi import slw2aoi
+import numpy as np
 ###############################
+
+
+
+def calc_dist(phase,evdp,depth,h):
+    '''
+    Calculates the distance travelled through a domain
+    Phase [str] - SKS or SKKS [for calculating ray param]
+    evdp - Source depth [km]. Used to calculate ray param.
+    gcarc - [deg] source - reciever distance in degrees
+    depth - depth of the base of the domain [km]. Used to calculate incidence angle
+    h - height of the domain [km]. default is 250 km
+    '''
+
+    aoi = slw2aoi(depth,evdp,110,phase) # Calculate ray param and then incidence angle
+    print(aoi)
+    dist = h / np.cos(np.radians(aoi))
+    return dist
 
 class Setter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
@@ -35,6 +54,8 @@ class Setter:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
         self.station = station
         self.ddir = ddir # Data directory (hopefully)
+        self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
+
 
     def get_mts(self,phase,fileID):
         '''Function to get the .mts file for a phase and read in the xml.
@@ -59,6 +80,8 @@ class Setter:
                 file = '{}/{}/{}/{}.BH{}'.format(self.ddir,self.station,phase,fileID,comp)
                 dst = '{}/data/{}.BH{}'.format(self.opath,fileID,comp)
                 p = copy(file, dst)
+
+
 
     def iter_files(self,phases=['SKS','SKKS']):
         '''
