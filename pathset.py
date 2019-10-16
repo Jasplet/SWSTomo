@@ -13,7 +13,7 @@
 ######## Imports ##############
 from xml.etree import ElementTree # ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
                                    # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
-
+from xml.etree.ElementTree import Element,SubElement
 from xml.dom import minidom
 import pandas as pd
 import os
@@ -24,19 +24,12 @@ from calc_aoi import slw2aoi
 import numpy as np
 ###############################
 
-def calc_dist(phase,evdp,depth,h):
-    '''
-    Calculates the distance travelled through a domain
-    Phase [str] - SKS or SKKS [for calculating ray param]
-    evdp - Source depth [km]. Used to calculate ray param.
-    gcarc - [deg] source - reciever distance in degrees
-    depth - depth of the base of the domain [km]. Used to calculate incidence angle
-    h - height of the domain [km]. default is 250 km
-    '''
-
-    aoi = slw2aoi(depth,evdp,110,phase) # Calculate ray param and then incidence angle
-    dist = h / np.cos(np.radians(aoi))
-    return dist
+def prettify(elem):
+    """Return a pretty-printed XML string for the Element.
+    """
+    rough_string = ElementTree.tostring(elem, 'utf-8')
+    reparsed = minidom.parseString(rough_string)
+    return reparsed.toprettyxml(indent="  ")
 
 class Setter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
@@ -95,17 +88,29 @@ class Setter:
         '''
         domains = self.model.findall('mtsML:domain',self.xmlns)
         for domain in domains:
-            uid = domain.find('mtsML:domain_uid',self.xmlns).text
-            if uid == domain:
+            uid_tmp = domain.find('mtsML:domain_uid',self.xmlns).text
+            if uid_tmp == domain:
                 print('Domain Found')
+                uid = uid_tmp
                 if uid.split('_')[0] == 'Lower':
                     # Domains starting with Lower are at CMB. So depth == 2890 km
-                    dep = 2890. # Approx depth of CMB [km]
+                    depth = 2890. # Approx depth of CMB [km]
                 elif uid.split('_')[0] == 'Upper':
-                    dep = 250. # Depth of upper domain (keeping domain the same thickness for now)
+                    depth = 250. # Depth of upper domain (keeping domain the same thickness for now)
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
-                d_len = calc_dist(phase,self.evdp,dep,self.dom_h) # Calculate path length in domain
+
+                aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+                dist = h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
+
+        ## Now return what we need to make the opertor (will do this above?)
+        operator = ElementTree.Element('operator')
+            dom_uid = ElementTree.SubElement('domain_uid',text=uid)
+            azimuth = ElementTree.SubElement('azi',text=self.AZ)
+            inclination = ElementTree.SubElement('inc',text=aoi)
+            l = ElementTree.SubElement('dist', text=dist)
+
+        return operator
 
     def iter_files(self,phases=['SKS','SKKS']):
         '''
@@ -113,7 +118,10 @@ class Setter:
         Phases [list] - list of phase codes to iterate over (assuming each row in the DataFame corresponds to all phases)
         '''
         for i, row in self.df.iterrows():
+            # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
+            self.az = row.AZ
+            self.gcarc = row.DIST
             evla = row.EVLA
             evlo = row.EVLO
             stla = row.STLA
