@@ -44,14 +44,16 @@ class Setter:
         self.df = df_in[df_in.STAT == station]
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
+            self.odir = self.opath.split('/')[-1]
+
         self.station = station
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'} # Dict with the Matisse XML namespace (for easy ref)
         ## Read Model.xml (assumed to be in working directory because why wouldnt it?)
         root = ElementTree.parse('Model.xml').getroot()
-        self.model = root.find('MtsML:model',self.xmlns)
-        model_name = model[0].text
+        self.model = root.find('mtsML:model',self.xmlns)
+        model_name = self.model[0].text
         print('Using model named ... {}'.format(model_name))
 
 
@@ -62,9 +64,15 @@ class Setter:
         '''
         mts = '{}/{}/{}/{}.mts'.format(self.ddir,self.station,phase,self.fileID)
         xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
-        data_element = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
+        data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                      # the bigger Pathset XML file
-        return data_element
+        for file in ['file1','file2','file3']:# Loop over file tags to add in pointer to data dir
+            f = data.find(file).text
+            print(f)
+            f_new = 'data/{}'.format(f)
+            data.find(file).text = f_new
+
+        return data
 
     def get_sac(self,phase):
         '''Function to copy data to the local data directory "data" if it is not already there (mainly useful for test/first runs).
@@ -87,8 +95,10 @@ class Setter:
         domain [str] - the domain name (tag <domain_uid>) for the domain we want to find and "cast" as the operator
         '''
         domains = self.model.findall('mtsML:domain',self.xmlns)
-        for domain in domains:
-            uid_tmp = domain.find('mtsML:domain_uid',self.xmlns).text
+        for dom in domains:
+            print(dom)
+            uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
+            print(uid_tmp)
             if uid_tmp == domain:
                 print('Domain Found')
                 uid = uid_tmp
@@ -101,26 +111,35 @@ class Setter:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
                 aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-                dist = h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
+                dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
         operator = ElementTree.Element('operator')
-            dom_uid = ElementTree.SubElement('domain_uid',text=uid)
-            azimuth = ElementTree.SubElement('azi',text=self.AZ)
-            inclination = ElementTree.SubElement('inc',text=aoi)
-            l = ElementTree.SubElement('dist', text=dist)
+        dom_uid = ElementTree.SubElement(operator,'domain_uid')
+        dom_uid.text = uid
+        azimuth = ElementTree.SubElement(operator,'azi')
+        azimuth.text = str(self.az)
+        inclination = ElementTree.SubElement(operator,'inc')
+        inclination.text = str(aoi)
+        l = ElementTree.SubElement(operator,'dist')
+        l.text = str(dist)
 
         return operator
 
-    def iter_files(self,phases=['SKS','SKKS']):
+    def gen_XML(self,phases=['SKS','SKKS']):
         '''
         Function to iterate over the DataFrame and construct the XML we need
         Phases [list] - list of phase codes to iterate over (assuming each row in the DataFame corresponds to all phases)
         '''
+        root = ElementTree.Element('MatisseML')
+        tree = ElementTree.ElementTree(root)
+        root.set("xmlns",self.xmlns['mtsML'])
+        pathset = ElementTree.SubElement(root,'pathset')
+        ps_uid = 'Path for run in dir {} .'.format(self.odir)
         for i, row in self.df.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
-            self.az = row.AZ
+            self.az = row.AZI
             self.gcarc = row.DIST
             evla = row.EVLA
             evlo = row.EVLO
@@ -128,8 +147,31 @@ class Setter:
             stlo = row.STLO
             stat = row.STAT
             for ph in phases:
+                #Each iteration of this loop is a seperate path (1 per phase and event)
                 f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
                 self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                 self.get_sac(ph)
-
+                # Now make XML for this Path
+                path = ElementTree.SubElement(pathset,'path')
+                pathname = 'Path {} {}'.format(i,ph)
+                path_uid = ElementTree.SubElement(path,'path_uid')
+                path_uid.text = pathname
+                # Add Data (from .mts)
                 data = self.get_mts(ph)
+                path.append(data)
+                stat_uid = ElementTree.SubElement(path,'station_uid')
+                stat_uid.text = stat
+                evt_uid = ElementTree.SubElement(path,'event_uid')
+                evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                # Now we need to select the correct domains and in the right order (order of operators).
+                # As the model get more complex these tests will have to get more "clever"
+                # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
+                op_UM = self.domain2operator('Upper_01',ph)
+                if ph == 'SKS':
+                    op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                elif ph == 'SKKS':
+                    op_LM = self.domain2operator('Lower_02',ph)
+                path.append(op_LM)
+                path.append(op_UM)
+
+        return tree
