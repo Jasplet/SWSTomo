@@ -36,12 +36,12 @@ class PathSetter:
     """
     def __init__(self,df_in,station,ddir,odir=None,config_uid='Test Run'):
 
-        self.df = df_in[df_in.STAT == station]
+        self.df = df_in[df_in['STAT'].isin(station)]
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
 
-        self.station = station
+        self.stations = station
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'} # Dict with the Matisse XML namespace (for easy ref)
@@ -58,7 +58,7 @@ class PathSetter:
            Phase [str] - SKS or SKKS (as my sheba runs are split by phase)
            fileID [str] - file name (.mts is appended here) [ now an attribute of Setter class]
         '''
-        mts = '{}/{}/{}/{}.mts'.format(self.ddir,self.station,phase,self.fileID)
+        mts = '{}/{}/{}/{}.mts'.format(self.ddir,self.stat,phase,self.fileID)
         xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
         data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                      # the bigger Pathset XML file
@@ -81,7 +81,7 @@ class PathSetter:
                 print('./data/{}.BH{} exists, not copying'.format(self.fileID,comp))
             else:
                 print('File not found, copying from Sheba Run Dir E_pacific if possible')
-                file = '{}/{}/{}/{}.BH{}'.format(self.ddir,self.station,phase,self.fileID,comp)
+                file = '{}/{}/{}/{}.BH{}'.format(self.ddir,self.stat,phase,self.fileID,comp)
                 dst = '{}/data/{}.BH{}'.format(self.opath,self.fileID,comp)
                 p = copy(file, dst)
 
@@ -132,43 +132,50 @@ class PathSetter:
         root.set("xmlns",self.xmlns['mtsML'])
         pathset = ElementTree.SubElement(root,'pathset')
         ps_uid = 'Path for run in dir {} .'.format(self.odir)
-        for i, row in self.df.iterrows():
-            # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-            self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
-            self.az = row.AZI
-            self.gcarc = row.DIST
-            evla = row.EVLA
-            evlo = row.EVLO
-            stla = row.STLA
-            stlo = row.STLO
-            stat = row.STAT
-            for ph in phases:
-                #Each iteration of this loop is a seperate path (1 per phase and event)
-                f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
-                self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
-                self.get_sac(ph)
-                # Now make XML for this Path
-                path = ElementTree.SubElement(pathset,'path')
-                pathname = 'Path {} {}'.format(i,ph)
-                path_uid = ElementTree.SubElement(path,'path_uid')
-                path_uid.text = pathname
-                # Add Data (from .mts)
-                data = self.get_mts(ph)
-                path.append(data)
-                stat_uid = ElementTree.SubElement(path,'station_uid')
-                stat_uid.text = stat
-                evt_uid = ElementTree.SubElement(path,'event_uid')
-                evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
-                # Now we need to select the correct domains and in the right order (order of operators).
-                # As the model get more complex these tests will have to get more "clever"
-                # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-                op_UM = self.domain2operator('Upper_01',ph)
-                if ph == 'SKS':
-                    op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
-                elif ph == 'SKKS':
-                    op_LM = self.domain2operator('Lower_02',ph)
-                path.append(op_LM)
-                path.append(op_UM)
+
+        for stat in self.stations:
+        # Loop over station list
+            print(stat)
+            self.stat = stat
+            sdf = self.df[self.df.STAT ==stat]
+            for i, row in sdf.iterrows():
+                # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
+                self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
+                self.az = row.AZI
+                self.gcarc = row.DIST
+                evla = row.EVLA
+                evlo = row.EVLO
+                stla = row.STLA
+                stlo = row.STLO
+
+                for ph in phases:
+                    #Each iteration of this loop is a seperate path (1 per phase and event)
+                    f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
+                    print(f)
+                    self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
+                    self.get_sac(ph)
+                    # Now make XML for this Path
+                    path = ElementTree.SubElement(pathset,'path')
+                    pathname = 'Path {} {}'.format(i,ph)
+                    path_uid = ElementTree.SubElement(path,'path_uid')
+                    path_uid.text = pathname
+                    # Add Data (from .mts)
+                    data = self.get_mts(ph)
+                    path.append(data)
+                    stat_uid = ElementTree.SubElement(path,'station_uid')
+                    stat_uid.text = stat
+                    evt_uid = ElementTree.SubElement(path,'event_uid')
+                    evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                    # Now we need to select the correct domains and in the right order (order of operators).
+                    # As the model get more complex these tests will have to get more "clever"
+                    # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
+                    op_UM = self.domain2operator('Upper_01',ph)
+                    if ph == 'SKS':
+                        op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                    elif ph == 'SKKS':
+                        op_LM = self.domain2operator('Lower_02',ph)
+                    path.append(op_LM)
+                    path.append(op_UM)
 
         self._write_pretty_xml(root,file='{}/Pathset.xml'.format(self.opath))
 
@@ -179,12 +186,45 @@ class PathSetter:
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
         root.set("xmlns",self.xmlns['mtsML'])
-        root.append(ElementTree.Comment('Generated by PathSetter from pathset.py'))
+        root.append(ElementTree.Comment('Generated by gen_MTS_Info from pathset.py'))
         samplerinfo = ElementTree.SubElement(root,'SamplerInfo')
         c_uid = ElementTree.SubElement(samplerinfo,'config_uid')
         c_uid.text = self.config_uid
-
+        # Now write the XML to a file
         self._write_pretty_xml(root,file='{}/MTS_Info.xml'.format(self.opath))
+
+    def gen_MTS_Config(self,options,pathset='Pathset.xml',model='Model.xml'):
+        '''
+        Function to create the MTS config file
+        Inputs ===============
+            Pathset - The name of the Pathset file
+            Model   - The name of the Model file
+            Option  - A dictionary of the operational options that one can pass to MTS.
+                      If no dict is provided that the defaults will be set. calc_2d_mppad has to be provided as it depends on domain names
+        '''
+        root = ElementTree.Element('MatisseML')
+        tree = ElementTree.ElementTree(root)
+        root.set("xmlns",self.xmlns['mtsML'])
+        root.append(ElementTree.Comment('Generated by gen_MTS_Config from pathset.py'))
+        config = ElementTree.SubElement(root,'config')
+        c_uid = ElementTree.SubElement(config,'config_uid')
+        c_uid.text = self.config_uid
+        root.append(ElementTree.Comment(' input files'))
+        mf = ElementTree.SubElement(config,'model_file') # Creat model file tag
+        mf.text = model
+        ps = ElementTree.SubElement(config,'pathset_file')
+        ps.text = pathset
+        root.append(ElementTree.Comment('operational options')) # Break before operational options ( for readablility)
+        if options is None:
+            print('Config not specified, using Defaults')
+            options = {'verbose': 0, 'max_ensemble_size': 1000000, 'tlag_domain':'time', 'nmodels':20000,'nmod_burn': 1000,
+                       'nmod_skip':1, 'step_size': 0.05, 'term_mode':'convergence', 'conv_limit': 0.0005, 'nmod_stable': 1000,
+                       'save_ensemble': 1, 'save_expvals': 1, 'nbin_1d_mppd': 50, 'nbin_2d_mppd': 50
+                       }
+        verb = ElementTree.SubElement(config,'verbose')
+        verb.text=0
+        max_ensemble = options['max_ensemble_size']
+
 
     def _write_pretty_xml(self,root,file):
         """Return a pretty-printed XML string for the Element.
