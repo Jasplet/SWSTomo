@@ -131,7 +131,9 @@ class PathSetter:
         tree = ElementTree.ElementTree(root)
         root.set("xmlns",self.xmlns['mtsML'])
         pathset = ElementTree.SubElement(root,'pathset')
-        ps_uid = 'Path for run in dir {} .'.format(self.odir)
+        psuid = 'Paths for run in dir {} .'.format(self.odir)
+        pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
+        pathset_uid.text = psuid
 
         for stat in self.stations:
         # Loop over station list
