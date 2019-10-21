@@ -106,7 +106,8 @@ class PathSetter:
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
-                aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+                # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+                aoi = 0 # Assume rays are vertical, not true but using this for testing.
                 dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
@@ -116,17 +117,23 @@ class PathSetter:
         azimuth = ElementTree.SubElement(operator,'azi')
         azimuth.text = str(self.az)
         inclination = ElementTree.SubElement(operator,'inc')
-        inclination.text = str(aoi)
+        inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
         l.text = str(dist)
 
         return operator
 
-    def gen_PathSet_XML(self,phases=['SKS','SKKS']):
+    def gen_PathSet_XML(self,phases=['SKS','SKKS'],fname=None):
         '''
         Function to iterate over the DataFrame and construct the XML we need
         Phases [list] - list of phase codes to iterate over (assuming each row in the DataFame corresponds to all phases)
         '''
+        # Some quick i/o management
+        if fname == None:
+            self.pathset_xml = 'Pathset' # Set default Pathset XML file name to 'Pathset.xml' (the .xml is added later)
+        else:
+            self.pathset_xml = fname
+        #Start of main function
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
         root.set("xmlns",self.xmlns['mtsML'])
@@ -179,7 +186,7 @@ class PathSetter:
                     path.append(op_LM)
                     path.append(op_UM)
 
-        self._write_pretty_xml(root,file='{}/Pathset.xml'.format(self.opath))
+        self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
     def gen_MTS_Info(self):
         '''
@@ -195,14 +202,16 @@ class PathSetter:
         # Now write the XML to a file
         self._write_pretty_xml(root,file='{}/MTS_Info.xml'.format(self.opath))
 
-    def gen_MTS_Config(self,options,pathset='Pathset.xml',model='Model.xml'):
+    def gen_MTS_Config(self,options,model='Model.xml'):
         '''
         Function to create the MTS config file
         Inputs ===============
-            Pathset - The name of the Pathset file
             Model   - The name of the Model file
             Option  - A dictionary of the operational options that one can pass to MTS.
                       If no dict is provided that the defaults will be set. calc_2d_mppad has to be provided as it depends on domain names
+        ======================
+        Pathset XML file name is taken from self.pathset_xml and is set by gen_PathSet_XML
+
         '''
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
@@ -215,7 +224,7 @@ class PathSetter:
         mf = ElementTree.SubElement(config,'model_file') # Creat model file tag
         mf.text = model
         ps = ElementTree.SubElement(config,'pathset_file')
-        ps.text = pathset
+        ps.text = '{}.xml'.format(self.pathset_xml)
         root.append(ElementTree.Comment('operational options')) # Break before operational options ( for readablility)
         if options is None:
             print('Config not specified, using Defaults')
