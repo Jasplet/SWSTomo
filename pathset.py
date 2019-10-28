@@ -34,19 +34,26 @@ class PathSetter:
             ddir [str] - the data directory. Directory where sheba has output the .mts (and SAC) files to
             odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
     """
-    def __init__(self,df_in,station,ddir,odir=None,config_uid='Test Run'):
+    def __init__(self,df_in,station,ddir,model=None,odir=None,config_uid='Test Run'):
 
         self.df = df_in[df_in['STAT'].isin(station)]
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
+        else:
+            self.opath = '/Users/ja17375/SWSTomo/BluePebble/{}'.format(odir)
+
+        if model == None:
+            print('Using Model.xml from MTS_Setup, copying to cwd {}'.format(self.opath))
+            self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/Model.xml'
+            copy(self.modelxml,self.opath)
 
         self.stations = station
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'} # Dict with the Matisse XML namespace (for easy ref)
         ## Read Model.xml (assumed to be in working directory because why wouldnt it?)
-        root = ElementTree.parse('Model.xml').getroot()
+        root = ElementTree.parse('{}'.format(self.modelxml)).getroot()
         self.model = root.find('mtsML:model',self.xmlns)
         model_name = self.model[0].text
         print('Using model named ... {}'.format(model_name))
@@ -202,7 +209,7 @@ class PathSetter:
         # Now write the XML to a file
         self._write_pretty_xml(root,file='{}/MTS_Info.xml'.format(self.opath))
 
-    def gen_MTS_Config(self,options,model='Model.xml'):
+    def gen_MTS_Config(self,options=None,model='Model.xml'):
         '''
         Function to create the MTS config file
         Inputs ===============
@@ -220,22 +227,29 @@ class PathSetter:
         config = ElementTree.SubElement(root,'config')
         c_uid = ElementTree.SubElement(config,'config_uid')
         c_uid.text = self.config_uid
-        root.append(ElementTree.Comment(' input files'))
+        config.append(ElementTree.Comment(' input files'))
         mf = ElementTree.SubElement(config,'model_file') # Creat model file tag
         mf.text = model
         ps = ElementTree.SubElement(config,'pathset_file')
         ps.text = '{}.xml'.format(self.pathset_xml)
-        root.append(ElementTree.Comment('operational options')) # Break before operational options ( for readablility)
+        config.append(ElementTree.Comment('operational options')) # Break before operational options ( for readablility)
         if options is None:
-            print('Config not specified, using Defaults')
-            options = {'verbose': 0, 'max_ensemble_size': 1000000, 'tlag_domain':'time', 'nmodels':20000,'nmod_burn': 1000,
-                       'nmod_skip':1, 'step_size': 0.05, 'term_mode':'convergence', 'conv_limit': 0.0005, 'nmod_stable': 1000,
-                       'save_ensemble': 1, 'save_expvals': 1, 'nbin_1d_mppd': 50, 'nbin_2d_mppd': 50
-                       }
-        verb = ElementTree.SubElement(config,'verbose')
-        verb.text=0
-        max_ensemble = options['max_ensemble_size']
+            print('Config not specified, using Defaults. Calc_2d_mmpad have to be added manually!')
+            options = {'verbose': '0', 'max_ensemble_size': '10000000', 'tlag_domain':'time', 'nmodels':'2000000','nmod_burn': '10000',
+                       'nmod_skip':'1', 'step_size': '0.05', 'term_mode':'convergence', 'conv_limit': '0.0005', 'nmod_stable': '1000',
+                       'save_ensemble': '1', 'save_expvals': '1', 'nbin_1d_mppd': '50', 'nbin_2d_mppd': '50' }
+        for opt in options:
+            conf_SE = ElementTree.SubElement(config,opt)
+            conf_SE.text=options[opt]
+            if opt == 'tlag_domain':
+                config.append(ElementTree.Comment(' MH Control Options '))
+            elif opt == 'stepsize':
+                config.append(ElementTree.Comment(' Termination Options '))
+            elif opt == 'nmod_stable':
+                config.append(ElementTree.Comment(' Output and Storage Options '))
 
+        # tree.write('MTSConfig.xml')
+        self._write_pretty_xml(root,file='{}/MTSConfig.xml'.format(self.opath))
 
     def _write_pretty_xml(self,root,file):
         """Return a pretty-printed XML string for the Element.
