@@ -91,8 +91,8 @@ class PathSetter:
         domain [str] - the domain name (tag <domain_uid>) for the domain we want to find and "cast" as the operator
         '''
         domains = self.model.findall('mtsML:domain',self.xmlns)
+
         for dom in domains:
-            print(dom)
             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
             print(uid_tmp)
             if uid_tmp == domain:
@@ -106,14 +106,14 @@ class PathSetter:
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
-                # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-                aoi = 0 # Assume rays are vertical, not true but using this for testing.
-                dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
+        # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        aoi = 0 # Assume rays are vertical, not true but using this for testing.
+        dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
         operator = ElementTree.Element('operator')
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
-        dom_uid.text = uid
+        dom_uid.text = domain
         azimuth = ElementTree.SubElement(operator,'azi')
         azimuth.text = str(self.az)
         inclination = ElementTree.SubElement(operator,'inc')
