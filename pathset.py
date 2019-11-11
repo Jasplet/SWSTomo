@@ -46,7 +46,10 @@ class PathSetter:
         if model == None:
             print('Using Model.xml from MTS_Setup, copying to cwd {}'.format(self.opath))
             self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/Model.xml'
-            copy(self.modelxml,self.opath)
+        else:
+            self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/{}'.format(model)
+
+
 
         self.stations = station
         self.ddir = ddir # Data directory (hopefully)
@@ -101,15 +104,16 @@ class PathSetter:
 
         for dom in domains:
             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
-            print(uid_tmp)
             if uid_tmp == domain:
-                print('Domain Found')
+                print('Domain {} Found'.format(uid_tmp))
                 uid = uid_tmp
                 if uid.split('_')[0] == 'Lower':
                     # Domains starting with Lower are at CMB. So depth == 2890 km
                     depth = 2890. # Approx depth of CMB [km]
+                    # azi = '0'
                 elif uid.split('_')[0] == 'Upper':
                     depth = 250. # Depth of upper domain (keeping domain the same thickness for now)
+                    # azi = str(self.az)
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
@@ -122,8 +126,8 @@ class PathSetter:
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
         dom_uid.text = domain
         azimuth = ElementTree.SubElement(operator,'azi')
-        # azimuth.text = str(self.az)
-        azimuth.text = 0
+        azimuth.text = str(self.az)
+        # azimuth.text = azi
         inclination = ElementTree.SubElement(operator,'inc')
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
@@ -142,17 +146,19 @@ class PathSetter:
         else:
             self.pathset_xml = fname
         #Start of main function
-        root = ElementTree.Element('MatisseML')
-        tree = ElementTree.ElementTree(root)
-        root.set("xmlns",self.xmlns['mtsML'])
-        pathset = ElementTree.SubElement(root,'pathset')
+        self.pathset_root = ElementTree.Element('MatisseML')
+        tree = ElementTree.ElementTree(self.pathset_root)
+        self.pathset_root.set("xmlns",self.xmlns['mtsML'])
+        pathset = ElementTree.SubElement(self.pathset_root,'pathset')
         psuid = 'Paths for run in dir {} .'.format(self.odir)
         pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
         pathset_uid.text = psuid
+        dom_used = []
 
         for stat in self.stations:
         # Loop over station list
             print(stat)
+
             self.stat = stat
             sdf = self.df[self.df.STAT ==stat]
             for i, row in sdf.iterrows():
@@ -168,8 +174,13 @@ class PathSetter:
                 for ph in phases:
                     #Each iteration of this loop is a seperate path (1 per phase and event)
                     f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
-                    print(f)
-                    self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
+
+                    try:
+                        self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
+                    except IndexError:
+                        print('File {} Not found'.format(f))
+                        continue
+
                     self.get_sac(ph)
                     # Now make XML for this Path
                     path = ElementTree.SubElement(pathset,'path')
@@ -186,15 +197,28 @@ class PathSetter:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     # As the model get more complex these tests will have to get more "clever"
                     # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-                    op_UM = self.domain2operator('Upper_01',ph)
-                    if ph == 'SKS':
-                        op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
-                    elif ph == 'SKKS':
-                        op_LM = self.domain2operator('Lower_02',ph)
+                    op_UM = self.domain2operator('Upper',ph)
+                    # if ph == 'SKS':
+                    dom_ext = self.baz_test(row.BAZ)
+                    print(dom_ext)
+                    op_LM = self.domain2operator('Lower_{}'.format(dom_ext),ph) # This will need to be a dictionary of domain UIDs
+                    if 'Lower_{}'.format(dom_ext) not in dom_used:
+                        dom_used.append('Lower_{}'.format(dom_ext))
+                    # elif ph == 'SKKS':
+                    #     dom_ext = self.baz_test(row.BAZ)
+                    #     op_LM = self.domain2operator('Lower_SKKS_{}'.format(dom_ext,ph))
                     path.append(op_LM)
                     path.append(op_UM)
+        print(dom_used)
+        self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
-        self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
+    def baz_test(self,baz):
+        '''
+        Function to test which 30 deg backzimuth bin each phase sits in
+        '''
+        for i,v in enumerate([30,60,90,120,150,180,210,240,270,300,330,360]):
+            if (baz > v-30) and (baz <= (v)):
+                return "{:03d}".format(v)
 
     def gen_MTS_Info(self):
         '''
