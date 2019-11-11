@@ -197,16 +197,55 @@ class PathSetter:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     # As the model get more complex these tests will have to get more "clever"
                     # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-                    op_UM = self.domain2operator('Upper',ph)
-                    # if ph == 'SKS':
-                    dom_ext = self.baz_test(row.BAZ)
-                    print(dom_ext)
-                    op_LM = self.domain2operator('Lower_{}'.format(dom_ext),ph) # This will need to be a dictionary of domain UIDs
-                    if 'Lower_{}'.format(dom_ext) not in dom_used:
-                        dom_used.append('Lower_{}'.format(dom_ext))
-                    # elif ph == 'SKKS':
-                    #     dom_ext = self.baz_test(row.BAZ)
-                    #     op_LM = self.domain2operator('Lower_SKKS_{}'.format(dom_ext,ph))
+                    # Assign Upper Domain
+                    if row.STLA >=40. :
+                        if row.STLO =< -110.0:
+                            op_UM = self.domain2operator('Upper_01') # This will need to be a dictionary of domain UIDs
+                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
+                            op_UM = self.domain2operator('Upper_02')
+                        elif row.STLO > -95.0:
+                            op_UM = self.domain2operator('Upper_03')
+                        else:
+                            print("Error No Domain for this!")
+                    elif row.STLA >= 40. :
+                        if row.STLO =< -110.0:
+                            op_UM = self.domain2operator('Upper_04') # This will need to be a dictionary of domain UIDs
+                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
+                            op_UM = self.domain2operator('Upper_05')
+                        elif row.STLO > -95.0:
+                            op_UM = self.domain2operator('Upper_06')
+                        else:
+                            print("Error No Domain for this STLO!")
+                    else:
+                        print("Error No Upper Domain for this STLA!")
+                    # Assign Lower Domain
+                    if ph == 'SKS':
+                        # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
+                        if row.SKS_PP_LAT >=35. :
+                            if row.SKS_PP_LON =< -130.6:
+                                op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
+                            elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
+                                op_LM = self.domain2operator('Lower_02')
+                            elif row.SKS_PP_LON > -110.0:
+                                op_LM = self.domain2operator('Lower_03')
+                            else:
+                                print("Error No Domain for this!")
+                        else:
+                            op_LM = self.domain2operator('Lower_04')
+                    # if 'Lower_{}'.format(dom_ext) not in dom_used:
+                    #     dom_used.append('Lower_{}'.format(dom_ext))
+                    elif ph == 'SKKS':
+                        if row.SKKS_PP_LAT >=35. :
+                            if row.SKKS_PP_LON =< -130.6:
+                                op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
+                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
+                                op_LM = self.domain2operator('Lower_02')
+                            elif row.SKKS_PP_LON > -110.0:
+                                op_LM = self.domain2operator('Lower_03')
+                            else:
+                                print("Error No Domain for this!")
+                        else:
+                            op_LM = self.domain2operator('Lower_04')
                     path.append(op_LM)
                     path.append(op_UM)
         print(dom_used)
