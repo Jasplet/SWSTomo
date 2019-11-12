@@ -34,9 +34,8 @@ class PathSetter:
             ddir [str] - the data directory. Directory where sheba has output the .mts (and SAC) files to
             odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
     """
-    def __init__(self,df_in,station,ddir,model=None,odir=None,config_uid='Test Run'):
+    def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run'):
 
-        self.df = df_in[df_in['STAT'].isin(station)]
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
@@ -49,9 +48,14 @@ class PathSetter:
         else:
             self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/{}'.format(model)
 
+        if station == None:
+            self.stations = df_in.STAT
+            self.df = df_in
+            print(self.stations)
+        else:
+            self.stations = station
+            self.df = df_in[df_in['STAT'].isin(station)]
 
-
-        self.stations = station
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'} # Dict with the Matisse XML namespace (for easy ref)
@@ -95,7 +99,7 @@ class PathSetter:
                 dst = '{}/data/{}.BH{}'.format(self.opath,self.fileID,comp)
                 p = copy(file, dst)
 
-    def domain2operator(self,domain,phase):
+    def domain2operator(self,domain):
         '''Function to read model.xml and extract the required domain
         Input -------
         domain [str] - the domain name (tag <domain_uid>) for the domain we want to find and "cast" as the operator
@@ -117,8 +121,8 @@ class PathSetter:
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
-        aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-        # aoi = 0 # Assume rays are vertical, not true but using this for testing.
+        # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        aoi = 0 # Assume rays are vertical, not true but using this for testing.
         dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
@@ -126,8 +130,8 @@ class PathSetter:
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
         dom_uid.text = domain
         azimuth = ElementTree.SubElement(operator,'azi')
-        azimuth.text = str(self.az)
-        # azimuth.text = azi
+        # azimuth.text = str(self.az)
+        azimuth.text = '0'
         inclination = ElementTree.SubElement(operator,'inc')
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
@@ -199,7 +203,7 @@ class PathSetter:
                     # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
                     # Assign Upper Domain
                     if row.STLA >=40. :
-                        if row.STLO =< -110.0:
+                        if row.STLO <= -110.0:
                             op_UM = self.domain2operator('Upper_01') # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             op_UM = self.domain2operator('Upper_02')
@@ -207,8 +211,8 @@ class PathSetter:
                             op_UM = self.domain2operator('Upper_03')
                         else:
                             print("Error No Domain for this!")
-                    elif row.STLA >= 40. :
-                        if row.STLO =< -110.0:
+                    elif row.STLA <= 40. :
+                        if row.STLO <= -110.0:
                             op_UM = self.domain2operator('Upper_04') # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             op_UM = self.domain2operator('Upper_05')
@@ -222,7 +226,7 @@ class PathSetter:
                     if ph == 'SKS':
                         # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
                         if row.SKS_PP_LAT >=35. :
-                            if row.SKS_PP_LON =< -130.6:
+                            if row.SKS_PP_LON <= -130.6:
                                 op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
                             elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
                                 op_LM = self.domain2operator('Lower_02')
@@ -236,7 +240,7 @@ class PathSetter:
                     #     dom_used.append('Lower_{}'.format(dom_ext))
                     elif ph == 'SKKS':
                         if row.SKKS_PP_LAT >=35. :
-                            if row.SKKS_PP_LON =< -130.6:
+                            if row.SKKS_PP_LON <= -130.6:
                                 op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
                             elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
                                 op_LM = self.domain2operator('Lower_02')
