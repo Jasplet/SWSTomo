@@ -36,6 +36,8 @@ class PathSetter:
     """
     def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run'):
 
+        print('Have you made sure that Date_Time_Converters have been applied to the df?')
+        date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
@@ -49,9 +51,10 @@ class PathSetter:
             self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/{}'.format(model)
 
         if station == None:
-            self.stations = df_in.STAT
+            stat_check = pd.read_csv('/Users/ja17375/SWSTomo/Jacks_stats_in_Epac.txt',delim_whitespace=True)
+            self.stations = stat_check.STA
             self.df = df_in
-            print(self.stations)
+            # print(self.stations)
         else:
             self.stations = station
             self.df = df_in[df_in['STAT'].isin(station)]
@@ -99,7 +102,7 @@ class PathSetter:
                 dst = '{}/data/{}.BH{}'.format(self.opath,self.fileID,comp)
                 p = copy(file, dst)
 
-    def domain2operator(self,domain):
+    def domain2operator(self,domain,phase):
         '''Function to read model.xml and extract the required domain
         Input -------
         domain [str] - the domain name (tag <domain_uid>) for the domain we want to find and "cast" as the operator
@@ -159,12 +162,18 @@ class PathSetter:
         pathset_uid.text = psuid
         dom_used = []
 
+        k = 0
+        nf = 0 # counter for files not found
+        q_fail = 0 # counter for pahses that fail Q test
+        ex = 0
+        (u1,u2,u3,u4,u5,u6,l1,l2,l3,l4) = (0,0,0,0,0,0,0,0,0,0)
         for stat in self.stations:
         # Loop over station list
             print(stat)
 
             self.stat = stat
             sdf = self.df[self.df.STAT ==stat]
+
             for i, row in sdf.iterrows():
                 # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
                 self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
@@ -176,15 +185,109 @@ class PathSetter:
                 stlo = row.STLO
 
                 for ph in phases:
+                    k = k + 1
                     #Each iteration of this loop is a seperate path (1 per phase and event)
                     f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
-
+                    if (ph == 'SKS') and (row.Q_SKS > 0.5) or (row.Q_SKS < -0.7):
+                        print(' SKS Pass')
+                        # pass # no operation required other than to keep the loop iterating
+                    elif (ph == 'SKKS') and (row.Q_SKKS > 0.5) or (row.Q_SKKS < -0.7) :
+                        print('SKKS Pass')
+                        # pass # Phase is SKKS and event is a clear split or null, so we can keep going
+                    else:
+                        print('Phase {} fails Q tests, continuing to next'.format(ph))
+                        q_fail += 1
+                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. skip to next.
                     try:
                         self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                     except IndexError:
                         print('File {} Not found'.format(f))
+                        nf += 1
                         continue
+                    # Now we need to select the correct domains and in the right order (order of operators).
+                    # As the model get more complex these tests will have to get more "clever"
+                    # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
+                    # Assign Upper Domain
+                    if row.STLA >=40. :
+                        if row.STLO <= -110.0:
+                            u1 = u1 + 1
+                            continue
+                            # op_UM = self.domain2operator('Upper_01',ph) # This will need to be a dictionary of domain UIDs
+                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
+                            u2 += 1
+                            continue
+                            # op_UM = self.domain2operator('Upper_02',ph)
+                        elif row.STLO > -95.0:
+                            u3 += 1
+                            continue
+                            # op_UM = self.domain2operator('Upper_03',ph)
+                        else:
+                            print("Error No Domain for this!")
+                    elif row.STLA <= 40. :
+                        if row.STLO <= -110.0:
+                            u4 +=1
+                            continue
+                            # op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
+                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
+                            u5 +=1
+                            # continue
+                            op_UM = self.domain2operator('Upper_05',ph)
+                        elif row.STLO > -95.0:
+                            u6 += 1
+                            continue
+                            # op_UM = self.domain2operator('Upper_06')
+                        else:
+                            print("Error No Domain for this STLO!")
+                    else:
+                        print("Error No Upper Domain for this STLA!")
 
+                    # Assign Lower Domain
+                    if ph == 'SKS':
+                        # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
+                        if row.SKS_PP_LAT >=35. :
+                            if row.SKS_PP_LON <= -130.6:
+                                continue
+                                l1 += 1
+                                # op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                            elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
+                                l2 += 1
+                                # continue
+                                op_LM = self.domain2operator('Lower_02',ph)
+                            elif row.SKS_PP_LON > -110.0:
+                                l3 += 1
+                                continue
+                                # op_LM = self.domain2operator('Lower_03')
+                            else:
+                                ex += 1
+                                print("Error No Domain for this!")
+                        else:
+                            l4 += 1
+                            continue
+                            # op_LM = self.domain2operator('Lower_04')
+                    # if 'Lower_{}'.format(dom_ext) not in dom_used:
+                    #     dom_used.append('Lower_{}'.format(dom_ext))
+                    elif ph == 'SKKS':
+                        if row.SKKS_PP_LAT >=35. :
+                            if row.SKKS_PP_LON <= -130.6:
+                                # op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                                l1 += 1
+                                continue
+                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
+                                op_LM = self.domain2operator('Lower_02',ph)
+                                l2 += 1
+                                # continue
+                            elif row.SKKS_PP_LON > -110.0:
+                                # op_LM = self.domain2operator('Lower_03')
+                                l3 += 1
+                                continue
+                            else:
+                                ex +=1
+                                print("Error No Domain for this!")
+                        else:
+                            l4 += 1
+                            continue
+                            # op_LM = self.domain2operator('Lower_04')
+                    # Now add Path to XML file
                     self.get_sac(ph)
                     # Now make XML for this Path
                     path = ElementTree.SubElement(pathset,'path')
@@ -198,61 +301,19 @@ class PathSetter:
                     stat_uid.text = stat
                     evt_uid = ElementTree.SubElement(path,'event_uid')
                     evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
-                    # Now we need to select the correct domains and in the right order (order of operators).
-                    # As the model get more complex these tests will have to get more "clever"
-                    # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-                    # Assign Upper Domain
-                    if row.STLA >=40. :
-                        if row.STLO <= -110.0:
-                            op_UM = self.domain2operator('Upper_01') # This will need to be a dictionary of domain UIDs
-                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
-                            op_UM = self.domain2operator('Upper_02')
-                        elif row.STLO > -95.0:
-                            op_UM = self.domain2operator('Upper_03')
-                        else:
-                            print("Error No Domain for this!")
-                    elif row.STLA <= 40. :
-                        if row.STLO <= -110.0:
-                            op_UM = self.domain2operator('Upper_04') # This will need to be a dictionary of domain UIDs
-                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
-                            op_UM = self.domain2operator('Upper_05')
-                        elif row.STLO > -95.0:
-                            op_UM = self.domain2operator('Upper_06')
-                        else:
-                            print("Error No Domain for this STLO!")
-                    else:
-                        print("Error No Upper Domain for this STLA!")
-                    # Assign Lower Domain
-                    if ph == 'SKS':
-                        # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
-                        if row.SKS_PP_LAT >=35. :
-                            if row.SKS_PP_LON <= -130.6:
-                                op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
-                            elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
-                                op_LM = self.domain2operator('Lower_02')
-                            elif row.SKS_PP_LON > -110.0:
-                                op_LM = self.domain2operator('Lower_03')
-                            else:
-                                print("Error No Domain for this!")
-                        else:
-                            op_LM = self.domain2operator('Lower_04')
-                    # if 'Lower_{}'.format(dom_ext) not in dom_used:
-                    #     dom_used.append('Lower_{}'.format(dom_ext))
-                    elif ph == 'SKKS':
-                        if row.SKKS_PP_LAT >=35. :
-                            if row.SKKS_PP_LON <= -130.6:
-                                op_LM = self.domain2operator('Lower_01') # This will need to be a dictionary of domain UIDs
-                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
-                                op_LM = self.domain2operator('Lower_02')
-                            elif row.SKKS_PP_LON > -110.0:
-                                op_LM = self.domain2operator('Lower_03')
-                            else:
-                                print("Error No Domain for this!")
-                        else:
-                            op_LM = self.domain2operator('Lower_04')
                     path.append(op_LM)
                     path.append(op_UM)
+
+        in_u_dom = u1+u2+u3+u4+u5+u6
         print(dom_used)
+        print('Total Phases:', k)
+        print('Upper_01: {}, Upper_02: {}, Upper_03: {}, Upper_04: {}, Upper_05: {}, Upper_06: {}'.format(u1,u2,u3,u4,u5,u6))
+        print('Lower_01: {}, Lower_02: {}, Lower_03: {}, Lower_04: {}'.format(l1,l2,l3,l4))
+        print('Phases assigned an upper domain:', in_u_dom)
+        print('Phases not assigned a lower domain ', ex)
+        print('Fail Q tests:', q_fail)
+        print('Not Found:', nf)
+        print('Sanity test [0 if sane]: {}'.format(k-(in_u_dom+q_fail+nf)))
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
     def baz_test(self,baz):
@@ -277,7 +338,7 @@ class PathSetter:
         # Now write the XML to a file
         self._write_pretty_xml(root,file='{}/MTS_Info.xml'.format(self.opath))
 
-    def gen_MTS_Config(self,options=None,model='Model.xml'):
+    def gen_MTS_Config(self,options=None):
         '''
         Function to create the MTS config file
         Inputs ===============
@@ -288,6 +349,8 @@ class PathSetter:
         Pathset XML file name is taken from self.pathset_xml and is set by gen_PathSet_XML
 
         '''
+        model = self.modelxml.split('/')[0]
+
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
         root.set("xmlns",self.xmlns['mtsML'])
