@@ -29,10 +29,17 @@ import numpy as np
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
     to parse/generate the XML needed for the PathSet file
-    Inputs: df [obj] - a DataFrame of the relevent .pairs file (Setter will select rows from the relevent station)
-            station [str] - the station code for the station[s] we want to include data for (starting with a single station)
+    Inputs:
+            Required:
+            #########
+            df [obj] - a DataFrame of the relevent .pairs file (Setter will select rows from the relevent station)
             ddir [str] - the data directory. Directory where sheba has output the .mts (and SAC) files to
+            Optional:
+            station [str] - the station code for the station[s] we want to include data for (starting with a single station).
+                            Now that we are looking at all stations in the East_Pacific we can read them in from a textfile
             odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
+            model [str] - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
+            config_uid [str] - An optional unique identifier that will be added to the MTSConfig file 
     """
     def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run'):
 
