@@ -97,7 +97,7 @@ def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
         print('Orientation {} not recognised'.format(orientation))
     return ax
 
-def plot_2d_mppd(i):
+def plot_2d_mppd(i,save=False,f_uid=None):
     '''
     plot the 2-D mppd on
     i - [str]. A 3 digits code ('001') that corresponds to the MPPD that we want to plot
@@ -107,6 +107,7 @@ def plot_2d_mppd(i):
     XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(i)) # Two-row file containing X and Y parameters
     x = XY[0] # array of X-parameters
     y = XY[1] # array of Y-parameters
+
     # Get Header of .p file for domain labels
     with open('MTS_2D_MPPD.{}.p'.format(i),'r') as reader:
         h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
@@ -131,9 +132,11 @@ def plot_2d_mppd(i):
     py_cppd = P[:,irow] / P_x[irow]
     _plot_1d_ppd(ax_x,x,px_cppd,dp_x)
     # ax_x.hist(x,x,weights=px_cppd,orientation='vertical',histtype='stepfilled')
+    ax_x.set_xlim([0,0.05])
     ax_x.invert_yaxis()
     # ax_y.hist(y,y,weights=py_cppd,orientation='horizontal',histtype='stepfilled')
     _plot_1d_ppd(ax_y,y,py_cppd,dp_y,orientation='horizontal')
+    ax_y.set_ylim([-90,90])
     ax_y.invert_xaxis()
     ax_y.set_ylabel('{}'.format(dp_y))
     ax_y.set_xlabel('p({})'.format(dp_y))
@@ -144,8 +147,8 @@ def plot_2d_mppd(i):
     C = ax_main.contourf(X,Y,P,21,cmap='magma')
     ax_main.plot(x[icol],y[irow],'xr')
     # plt.colorbar(C)
-    ax_y.set_ylim(-90,90)
-    ax_x.set_xlim(0,0.05)
+
+
     ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
     ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
     plt.setp(ax_main.get_xticklabels(),visible=False)
@@ -154,17 +157,28 @@ def plot_2d_mppd(i):
     plt.title('MPPD for Domain {}'.format(dp_x.split(':')[0]))
     # fig,ax = plt.subplots(1,1)
     # _plot_1d_ppd(ax,x,px_cppd,dp_x)
-
+    if sv is True:
+        plt.savefig('/Users/ja17375/SWSTomo/Figures/E_pac_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
 
 if __name__ == "__main__":
     # If this script is being run from the command line
-    idx = sys.argv[0] # expected usage is plot_2d_mppd.py 001
+    # idx = sys.argv[0] # expected usage is plot_2d_mppd.py 001
+    save = sys.argv[1]
+    print(save)
+    if save == 'yes':
+        print('Plots will be saved')
+        f_uid = input('Enter Unique Identifier for the MPPD plots: ')
+        sv = True
+    else:
+        print('Not Saving')
+        f_uid='placeholder'
+        sv = False
 
     n = glob('MTS_2D_MPPD*.xy')
     idx = [f.split('.')[1] for f in n]
     for i in idx:
         print(i)
-        plot_2d_mppd(i)
+        plot_2d_mppd(i,sv,f_uid)
     # Do stuff (plotting mainly)
     plt.show()
 # EOF
