@@ -4,7 +4,8 @@
 #        slw2aoi(slw,depth,'p') - use depth specified (P-wave)
 # where phase = 'p' or 's' (s is default)
 # slowness in s/deg
-# Ported from J. Wookeys matlab function slw2aoi.m, here I also calulate the slowness using TauP
+# The function slw2aoi is a ported version of a function slw2aoi.m, written by James Wookey, which I have adpated.
+# Here I also calulate the slowness using TauP
 
 import numpy as np
 from obspy.taup import TauPyModel
