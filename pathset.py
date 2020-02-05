@@ -39,7 +39,7 @@ class PathSetter:
                             Now that we are looking at all stations in the East_Pacific we can read them in from a textfile
             odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
             model [str] - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
-            config_uid [str] - An optional unique identifier that will be added to the MTSConfig file 
+            config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
     def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run'):
 
@@ -218,23 +218,23 @@ class PathSetter:
                     if row.STLA >=40. :
                         if row.STLO <= -110.0:
                             u1 = u1 + 1
-                            continue
-                            # op_UM = self.domain2operator('Upper_01',ph) # This will need to be a dictionary of domain UIDs
+                            # continue
+                            op_UM = self.domain2operator('Upper_01',ph) # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             u2 += 1
-                            continue
-                            # op_UM = self.domain2operator('Upper_02',ph)
+                            # continue
+                            op_UM = self.domain2operator('Upper_02',ph)
                         elif row.STLO > -95.0:
                             u3 += 1
-                            continue
+                            # continue
                             # op_UM = self.domain2operator('Upper_03',ph)
                         else:
                             print("Error No Domain for this!")
                     elif row.STLA <= 40. :
                         if row.STLO <= -110.0:
                             u4 +=1
-                            continue
-                            # op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
+                            # continue
+                            op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             u5 +=1
                             # continue
@@ -253,9 +253,9 @@ class PathSetter:
                         # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
                         if row.SKS_PP_LAT >=35. :
                             if row.SKS_PP_LON <= -130.6:
-                                continue
+                                # continue
                                 l1 += 1
-                                # op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
                             elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
                                 l2 += 1
                                 # continue
@@ -276,13 +276,13 @@ class PathSetter:
                     elif ph == 'SKKS':
                         if row.SKKS_PP_LAT >=35. :
                             if row.SKKS_PP_LON <= -130.6:
-                                # op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
+                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
                                 l1 += 1
-                                continue
-                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
-                                op_LM = self.domain2operator('Lower_02',ph)
-                                l2 += 1
                                 # continue
+                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
+                                # op_LM = self.domain2operator('Lower_02',ph)
+                                l2 += 1
+                                continue
                             elif row.SKKS_PP_LON > -110.0:
                                 # op_LM = self.domain2operator('Lower_03')
                                 l3 += 1
