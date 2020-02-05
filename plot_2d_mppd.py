@@ -18,6 +18,7 @@ import numpy as np
 from matplotlib.gridspec import GridSpec as gs
 import sys
 from glob import glob
+import argparse
 ###############################
 
 def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
@@ -107,7 +108,6 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(i)) # Two-row file containing X and Y parameters
     x = XY[0] # array of X-parameters
     y = XY[1] # array of Y-parameters
-
     # Get Header of .p file for domain labels
     with open('MTS_2D_MPPD.{}.p'.format(i),'r') as reader:
         h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
@@ -118,7 +118,7 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     (X,Y) = np.meshgrid(x,y)
 
     fig = plt.figure(figsize = (8,8))
-    axs = gs(4,4, hspace =0.2, wspace=0.2)
+    axs = gs(4,4, hspace =0.3, wspace=0.3)
     ax_y = fig.add_subplot(axs[:-1,0])
     ax_x = fig.add_subplot(axs[-1,1:])
     ax_main = fig.add_subplot(axs[:-1,1:],sharey=ax_y,sharex=ax_x)
@@ -132,11 +132,11 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     py_cppd = P[:,irow] / P_x[irow]
     _plot_1d_ppd(ax_x,x,px_cppd,dp_x)
     # ax_x.hist(x,x,weights=px_cppd,orientation='vertical',histtype='stepfilled')
-    ax_x.set_xlim([0,0.05])
+
     ax_x.invert_yaxis()
     # ax_y.hist(y,y,weights=py_cppd,orientation='horizontal',histtype='stepfilled')
     _plot_1d_ppd(ax_y,y,py_cppd,dp_y,orientation='horizontal')
-    ax_y.set_ylim([-90,90])
+    # ax_y.set_ylim([-90,90])
     ax_y.invert_xaxis()
     ax_y.set_ylabel('{}'.format(dp_y))
     ax_y.set_xlabel('p({})'.format(dp_y))
@@ -144,13 +144,20 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     ax_x.set_ylabel('p({})'.format(dp_x))
 
 
-    C = ax_main.contourf(X,Y,P,21,cmap='magma')
-    ax_main.plot(x[icol],y[irow],'xr')
+    C = ax_main.contourf(X,Y,P,18,cmap='magma')
+    ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     # plt.colorbar(C)
+    print(x.max())
+    if x.max() == 0.0495: # This is the max value of unrestricted domain:
+        ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
+        ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
+        ax_x.set_xlim([0,0.05])
+        ax_y.set_ylim([-90,90])
+    else:
+        print('Resricted Domain, adjusting scale')
+        ax_x.set_xlim([np.around(x.min(),decimals=2),np.around(x.max(),decimals=2)])
+        ax_y.set_ylim([np.around(y.min(),decimals=2),np.around(y.max(),decimals=2)])
 
-
-    ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
-    ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
     plt.setp(ax_main.get_xticklabels(),visible=False)
     plt.setp(ax_main.get_yticklabels(),visible=False)
 
@@ -163,9 +170,12 @@ def plot_2d_mppd(i,save=False,f_uid=None):
 if __name__ == "__main__":
     # If this script is being run from the command line
     # idx = sys.argv[0] # expected usage is plot_2d_mppd.py 001
-    save = sys.argv[1]
-    print(save)
-    if save == 'yes':
+    ## Parse argueemnts
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s","--save",action="store_true",help="saves MPPD plots")
+    args = parser.parse_args()
+
+    if args.save:
         print('Plots will be saved')
         f_uid = input('Enter Unique Identifier for the MPPD plots: ')
         sv = True
@@ -176,6 +186,7 @@ if __name__ == "__main__":
 
     n = glob('MTS_2D_MPPD*.xy')
     idx = [f.split('.')[1] for f in n]
+    idx.sort() # sort idx in ascending order (for tidyness sake)
     for i in idx:
         print(i)
         plot_2d_mppd(i,sv,f_uid)
