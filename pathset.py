@@ -131,8 +131,8 @@ class PathSetter:
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
 
-        # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-        aoi = 0 # Assume rays are vertical, not true but using this for testing.
+        aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        # aoi = 0 # Assume rays are vertical, not true but using this for testing.
         dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
@@ -280,9 +280,9 @@ class PathSetter:
                                 l1 += 1
                                 # continue
                             elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
-                                # op_LM = self.domain2operator('Lower_02',ph)
+                                op_LM = self.domain2operator('Lower_02',ph)
                                 l2 += 1
-                                continue
+                                # continue
                             elif row.SKKS_PP_LON > -110.0:
                                 # op_LM = self.domain2operator('Lower_03')
                                 l3 += 1
