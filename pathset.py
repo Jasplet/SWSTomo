@@ -54,9 +54,13 @@ class PathSetter:
         if model == None:
             print('Using Model.xml from MTS_Setup, copying to cwd {}'.format(self.opath))
             self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/Model.xml'
-        else:
+        elif use_setup is True:
+            print("Reading Model file from MTS_Setup")
             self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/{}'.format(model)
-
+        else:
+            print("Reading Model file from {}".format(os.getcwd()))
+            self.modelxml = '{}/{}'.format(self.opath,model)
+            
         if station == None:
             stat_check = pd.read_csv('/Users/ja17375/SWSTomo/Jacks_stats_in_Epac.txt',delim_whitespace=True)
             self.stations = stat_check.STA
