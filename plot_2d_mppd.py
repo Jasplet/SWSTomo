@@ -143,21 +143,25 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     ax_x.set_xlabel('{}'.format(dp_x))
     ax_x.set_ylabel('p({})'.format(dp_x))
 
-
-    C = ax_main.contourf(X,Y,P,18,cmap='magma')
-    ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     # plt.colorbar(C)
     print(x.max())
     if x.max() == 0.0495: # This is the max value of unrestricted domain:
+        ax_extent= (0,0.05,-90,90)
+        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower')
         ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
         ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
         ax_x.set_xlim([0,0.05])
         ax_y.set_ylim([-90,90])
     else:
         print('Resricted Domain, adjusting scale')
+        ax_extent = (0,np.around(x.max(),decimals=2),np.around(y.min(),decimals=0),np.around(y.max(),decimals=0))
+        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower')
+        print(ax_extent)
         ax_x.set_xlim([np.around(x.min(),decimals=2),np.around(x.max(),decimals=2)])
-        ax_y.set_ylim([np.around(y.min(),decimals=2),np.around(y.max(),decimals=2)])
+        ax_y.set_ylim([np.around(y.min(),decimals=0),np.around(y.max(),decimals=0)])
 
+    ax_main.plot(x[icol],y[irow],'xb',markersize=15)
+    print(r'Most likely (maxima) points is $\gamma = ${}, $s = ${}'.format(y[irow],x[icol]))
     plt.setp(ax_main.get_xticklabels(),visible=False)
     plt.setp(ax_main.get_yticklabels(),visible=False)
 
