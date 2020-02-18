@@ -41,7 +41,7 @@ class PathSetter:
             model [str] - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
             config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
-    def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run'):
+    def __init__(self,df_in,ddir,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
 
         print('Have you made sure that Date_Time_Converters have been applied to the df?')
         date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
@@ -60,7 +60,7 @@ class PathSetter:
         else:
             print("Reading Model file from {}".format(os.getcwd()))
             self.modelxml = '{}/{}'.format(self.opath,model)
-            
+
         if station == None:
             stat_check = pd.read_csv('/Users/ja17375/SWSTomo/Jacks_stats_in_Epac.txt',delim_whitespace=True)
             self.stations = stat_check.STA
