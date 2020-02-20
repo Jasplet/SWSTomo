@@ -122,6 +122,7 @@ class PathSetter:
 
         for dom in domains:
             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
+
             if uid_tmp == domain:
                 print('Domain {} Found'.format(uid_tmp))
                 uid = uid_tmp
@@ -134,6 +135,8 @@ class PathSetter:
                     # azi = str(self.az)
                 else:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
+            # else:
+            #     print('Domain {} is not in Model!'.format(uid_tmp))
 
         aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
         # aoi = 0 # Assume rays are vertical, not true but using this for testing.
@@ -226,8 +229,8 @@ class PathSetter:
                             op_UM = self.domain2operator('Upper_01',ph) # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             u2 += 1
-                            continue
-                            # op_UM = self.domain2operator('Upper_02',ph)
+                            # continue
+                            op_UM = self.domain2operator('Upper_02',ph)
                         elif row.STLO > -95.0:
                             u3 += 1
                             continue
@@ -237,12 +240,12 @@ class PathSetter:
                     elif row.STLA <= 40. :
                         if row.STLO <= -110.0:
                             u4 +=1
-                            continue
-                            # op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
+                            # continue
+                            op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
                         elif (row.STLO > -110.0) and (row.STLO <= -95.0):
                             u5 +=1
-                            continue
-                            # op_UM = self.domain2operator('Upper_05',ph)
+                            # continue
+                            op_UM = self.domain2operator('Upper_05',ph)
                         elif row.STLO > -95.0:
                             u6 += 1
                             continue
@@ -259,11 +262,11 @@ class PathSetter:
                             if row.SKS_PP_LON <= -130.6:
                                 # continue
                                 l1 += 1
-                                op_LM = self.domain2operator('Lower_01_SKS',ph) # This will need to be a dictionary of domain UIDs
+                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
                             elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
                                 l2 += 1
-                                continue
-                                # op_LM = self.domain2operator('Lower_02',ph)
+                                # continue
+                                op_LM = self.domain2operator('Lower_02',ph)
                             elif row.SKS_PP_LON > -110.0:
                                 l3 += 1
                                 continue
@@ -280,13 +283,13 @@ class PathSetter:
                     elif ph == 'SKKS':
                         if row.SKKS_PP_LAT >=35. :
                             if row.SKKS_PP_LON <= -130.6:
-                                op_LM = self.domain2operator('Lower_01_SKKS',ph) # This will need to be a dictionary of domain UIDs
+                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
                                 l1 += 1
                                 # continue
                             elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
-                                # op_LM = self.domain2operator('Lower_02',ph)
+                                op_LM = self.domain2operator('Lower_02',ph)
                                 l2 += 1
-                                continue
+                                # continue
                             elif row.SKKS_PP_LON > -110.0:
                                 # op_LM = self.domain2operator('Lower_03')
                                 l3 += 1
