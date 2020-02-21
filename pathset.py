@@ -344,16 +344,32 @@ class PathSetter:
             if (baz > v-30) and (baz <= (v)):
                 return "{:03d}".format(v)
 
-    def gen_Model_XML(self,Up_Domains=None):
+    def gen_Model_XML(self,binned_data,mod_name=None,Low_Domains=None):
         '''
-        Generate a default Model XML file, containing all requested Upper Domains (default is all in .domains file)
-        and all corresponding Lower domains.
+        Generate a default Model XML file, containing all requested Lower Domains (default is all in .domains file)
+        and all corresponding Upper domains.
         '''
 
-        if Up_Domains is None:
+        mesh = pd.read_csv(binned_data,delim_whitespace=True)
+
+        if Low_Domains is None:
             print('Using all domains in .domains file')
-            Up_Domains =
+            lowb = mesh.SKS_BIN.append(bins.SKKS_BIN)
+            Low_Domains = lowb.drop_duplicates().values
 
+        if mod_name is None:
+            mod_name = input('No model name provided. Enter one now :')
+
+        #find corresponding Upper Domains
+        # first test outside of loop so we can append the rest into 1 Series more easily
+        u_df = mesh[(mesh['SKS_BIN'] == Low_Domains[0]) | (mesh['SKKS_BIN'] == Low_Domains[0])]['UPPER_BIN']
+        for i in range(1,len(Low_Domains)):
+            tmp = mesh[(mesh['SKS_BIN'] == Low_Domains[i]) | (mesh['SKKS_BIN'] == Low_Domains[i])]['UPPER_BIN']
+            u_df = u_df.append(tmp)
+        Up_Domains = u_df.drop_duplicates()
+
+
+        # Write the xml
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
         root.set("xmlns",self.xmlns['mtsML'])
@@ -361,6 +377,42 @@ class PathSetter:
         m = Ele.SubElement(root,'model')
         m_uid = ElementTree.SubElement(m,'model_uid')
         m_uid.text = 'Trigonal Domains'
+
+        u,l = 0,0
+        for udoms in Up_Domains:
+            dom = bin2domain('Upper_{}'.format(udom))
+            m.append(dom)
+            u += 1
+
+        for ldoms in Low_Domains:
+            # Loop over requested lower domains
+            dom = bin2domain('Lower_{}'.format(ldom))
+            m.append(dom)
+            l+=1
+
+        print('Model Generated')
+        print('{} Upper domains, {} Lower domains'.format(u,l))
+        self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,mod_name))
+
+    def bin2domain(self,dom_name):
+        '''
+        Takes a single bin and creates the requisit domain XML (for Model.xml)
+        '''
+        domain = ElementTree.Element('domain')
+        domain.append(ElementTree.Comment(' Identifier '))
+        dom_uid = ElementTree.SubElement(domain,'domain_uid')
+        dom_uid.text = dom_name
+        domain.append(ElementTree.Comment(' Elastic medium '))
+        medium = ElementTree.SubElement(domain,'medium')
+        medium.text = 'elliptical:2000.,1000.,2000.'
+        domain.append(ElementTree.Comment(' Inversion Parameters '))
+        alpha = ElementTree.SubElement(domain, 'alpha', type="fixed",value="90")
+        beta = ElementTree.SubElement(domain, 'beta', type="fixed",value="0")
+        gamma = ElementTree.SubElement(domain, 'gamma', type="periodic",min="-90",max="90",init="0")
+        domain.append(ElementTree.Comment('<gamma  type="fixed" value="-30"/>'))
+        s = ElementTree.SubElement(domain, 'strength', type="fixed",min="0.00",max="0.05",init="0.0125")
+
+        return domain
 
     def gen_MTS_Info(self):
         '''
