@@ -224,7 +224,7 @@ class PathSetter:
                     else:
                         print('Phase {} fails Q tests, continuing to next'.format(ph))
                         q_fail += 1
-                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. skip to next.
+                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
                     try:
                         self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                     except IndexError:
