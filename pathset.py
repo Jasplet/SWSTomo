@@ -37,21 +37,27 @@ class PathSetter:
     Inputs:
             Required:
             #########
-            df [obj] - a DataFrame of the relevent .pairs file (Setter will select rows from the relevent station)
-            ddir [str] - the data directory. Directory where sheba has output the .mts (and SAC) files to
+            df [obj]   -  filename for the relevent .pairs file, with T3 bins for SKS, SKKS in lower domains and in the upper mantle
+                         Titled: SKS_BIN, SKKS_BIN, UPPER_BIN (Setter will select rows from the relevent station)
+            ddir [str] - The data directory. Directory where sheba has output the .mts (and SAC) files to
+            domains    - A domains file (e.g. E_pac.T3.counts.doms). This file must contain the trigonal domain midpoints (having Vertices is
+                         nice, as it the Upper and Lower domains counts for each bin (i.e. how many paths were assigned to each bin by geogeom)
             Optional:
             station [str] - the station code for the station[s] we want to include data for (starting with a single station).
                             Now that we are looking at all stations in the East_Pacific we can read them in from a textfile
-            odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
-            model [str] - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
+            odir [str]    - The output directory. Path to where we want our output. If none, we use the current working directory
+            model [str]   - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
             config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
-    def __init__(self,df_file,ddir,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
+    def __init__(self,df_file,ddir,domains,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
 
         print(df_file)
         print('Reading df')
         date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
         df_in = pd.read_csv(df_file,converters=date_time_convert,delim_whitespace=True)
+        print('Read Trigonal Domians file')
+        self.doms = pd.read_csv(domains,delim_whitespace=True)
+        print('Set Outdir')
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
@@ -224,7 +230,7 @@ class PathSetter:
                     else:
                         print('Phase {} fails Q tests, continuing to next'.format(ph))
                         q_fail += 1
-                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. skip to next.
+                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
                     try:
                         self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                     except IndexError:
