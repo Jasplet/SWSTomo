@@ -37,26 +37,34 @@ class PathSetter:
     Inputs:
             Required:
             #########
-            df [obj] - a DataFrame of the relevent .pairs file (Setter will select rows from the relevent station)
-            ddir [str] - the data directory. Directory where sheba has output the .mts (and SAC) files to
+            df [obj]   -  filename for the relevent .pairs file, with T3 bins for SKS, SKKS in lower domains and in the upper mantle
+                         Titled: SKS_BIN, SKKS_BIN, UPPER_BIN (Setter will select rows from the relevent station)
+            ddir [str] - The data directory. Directory where sheba has output the .mts (and SAC) files to
+            domains    - A domains file (e.g. E_pac.T3.counts.doms). This file must contain the trigonal domain midpoints (having Vertices is
+                         nice, as it the Upper and Lower domains counts for each bin (i.e. how many paths were assigned to each bin by geogeom)
             Optional:
             station [str] - the station code for the station[s] we want to include data for (starting with a single station).
                             Now that we are looking at all stations in the East_Pacific we can read them in from a textfile
-            odir [str] - the output directory. Path to where we want our output. If none, we use the current working directory
-            model [str] - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
+            odir [str]    - The output directory. Path to where we want our output. If none, we use the current working directory
+            model [str]   - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
             config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
-    def __init__(self,df_file,ddir,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
+    def __init__(self,df_file,ddir,domains,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
 
         print(df_file)
         print('Reading df')
         date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
         df_in = pd.read_csv(df_file,converters=date_time_convert,delim_whitespace=True)
+        print('Read Trigonal Domians file')
+        self.doms = pd.read_csv(domains,delim_whitespace=True)
+        print('Set Outdir')
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
         else:
             self.opath = '/Users/ja17375/SWSTomo/BluePebble/{}'.format(odir)
+        # Set XML namespace
+        self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
 
         if model == None:
             print('Model will need to be generated before Pathsetting can be done')
@@ -73,8 +81,8 @@ class PathSetter:
             print("Reading Model file from {}".format(os.getcwd()))
             self.modelxml = '{}/{}'.format(self.opath,model)
             ## Read Model.xml (assumed to be in working directory because why wouldnt it?)
-            root = ElementTree.parse('{}'.format(self.modelxml)).getroot()
-            self.model = root.find('mtsML:model',self.xmlns)
+            self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
+            self.model = self.modelroot.find('mtsML:model',self.xmlns)
             model_name = self.model[0].text
             print('Using model named ... {}'.format(model_name))
 
@@ -89,7 +97,6 @@ class PathSetter:
 
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
-        self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'} # Dict with the Matisse XML namespace (for easy ref)
 
         # Set config uID
         self.config_uid = config_uid
@@ -169,6 +176,24 @@ class PathSetter:
 
         return operator
 
+    def parsedoms(self):
+        '''
+
+        '''
+
+        dml = '{{{}}}domain'.format(self.xmlns['mtsML']) # need the triple curly braces to get a get of braces surrounding the mtsML
+        udoms = []
+        ldoms = []
+        for dom in self.model.iter(dml):
+            d_id = dom[0].text
+            if d_id.split('_')[0] == 'Upper':
+                udoms.append(int(d_id.split('_')[1]))
+            elif d_id.split('_')[0] == 'Lower':
+                ldoms.append(int(d_id.split('_')[1]))
+
+        return (udoms,ldoms)
+
+
     def gen_PathSet_XML(self,phases=['SKS','SKKS'],fname=None):
         '''
         Function to iterate over the DataFrame and construct the XML we need
@@ -193,7 +218,9 @@ class PathSetter:
         nf = 0 # counter for files not found
         q_fail = 0 # counter for pahses that fail Q test
         ex = 0
-        (u1,u2,u3,u4,u5,u6,l1,l2,l3,l4) = (0,0,0,0,0,0,0,0,0,0)
+        # Before Pathsetting, parse the upper/lower domains from the model file
+        udoms,ldoms = self.parsedoms()
+
         for stat in self.stations:
         # Loop over station list
             print(stat)
@@ -234,86 +261,8 @@ class PathSetter:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     # As the model get more complex these tests will have to get more "clever"
                     # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-                    # Assign Upper Domain
-                    if row.STLA >=40. :
-                        if row.STLO <= -110.0:
-                            u1 = u1 + 1
-                            # continue
-                            op_UM = self.domain2operator('Upper_01',ph) # This will need to be a dictionary of domain UIDs
-                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
-                            u2 += 1
-                            # continue
-                            op_UM = self.domain2operator('Upper_02',ph)
-                        elif row.STLO > -95.0:
-                            u3 += 1
-                            continue
-                            # op_UM = self.domain2operator('Upper_03',ph)
-                        else:
-                            print("Error No Domain for this!")
-                    elif row.STLA <= 40. :
-                        if row.STLO <= -110.0:
-                            u4 +=1
-                            # continue
-                            op_UM = self.domain2operator('Upper_04',ph) # This will need to be a dictionary of domain UIDs
-                        elif (row.STLO > -110.0) and (row.STLO <= -95.0):
-                            u5 +=1
-                            # continue
-                            op_UM = self.domain2operator('Upper_05',ph)
-                        elif row.STLO > -95.0:
-                            u6 += 1
-                            continue
-                            # op_UM = self.domain2operator('Upper_06')
-                        else:
-                            print("Error No Domain for this STLO!")
-                    else:
-                        print("Error No Upper Domain for this STLA!")
 
-                    # Assign Lower Domain
-                    if ph == 'SKS':
-                        # Now parameterised for E_Pacifc, test of lat/lon and assign domain accordingly
-                        if row.SKS_PP_LAT >=35. :
-                            if row.SKS_PP_LON <= -130.6:
-                                # continue
-                                l1 += 1
-                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
-                            elif (row.SKS_PP_LON > -130.6) and (row.SKS_PP_LON <= -110.0):
-                                l2 += 1
-                                # continue
-                                op_LM = self.domain2operator('Lower_02',ph)
-                            elif row.SKS_PP_LON > -110.0:
-                                l3 += 1
-                                continue
-                                # op_LM = self.domain2operator('Lower_03')
-                            else:
-                                ex += 1
-                                print("Error No Domain for this!")
-                        else:
-                            l4 += 1
-                            continue
-                            # op_LM = self.domain2operator('Lower_04')
-                    # if 'Lower_{}'.format(dom_ext) not in dom_used:
-                    #     dom_used.append('Lower_{}'.format(dom_ext))
-                    elif ph == 'SKKS':
-                        if row.SKKS_PP_LAT >=35. :
-                            if row.SKKS_PP_LON <= -130.6:
-                                op_LM = self.domain2operator('Lower_01',ph) # This will need to be a dictionary of domain UIDs
-                                l1 += 1
-                                # continue
-                            elif (row.SKKS_PP_LON > -130.6) and (row.SKKS_PP_LON <= -110.0):
-                                op_LM = self.domain2operator('Lower_02',ph)
-                                l2 += 1
-                                # continue
-                            elif row.SKKS_PP_LON > -110.0:
-                                # op_LM = self.domain2operator('Lower_03')
-                                l3 += 1
-                                continue
-                            else:
-                                ex +=1
-                                print("Error No Domain for this!")
-                        else:
-                            l4 += 1
-                            continue
-                            # op_LM = self.domain2operator('Lower_04')
+
                     # Now add Path to XML file
                     self.get_sac(ph)
                     # Now make XML for this Path
