@@ -213,7 +213,9 @@ class PathSetter:
         pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
         pathset_uid.text = psuid
         dom_used = []
-
+        ##
+        dist_client = iris.Client()
+        ##
         k = 0
         nf = 0 # counter for files not found
         q_fail = 0 # counter for pahses that fail Q test
@@ -261,8 +263,14 @@ class PathSetter:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     # As the model get more complex these tests will have to get more "clever"
                     # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
-
-
+                    phlat = '{}_PP_LAT'.format(ph)
+                    phlon = '{}_PP_LON'.format(ph)
+                    pplat = row[phlat]
+                    pplon = row[phlon]
+                    for i,dom in doms.iterrows():
+                        crit =6.0 # [deg] - the distance criterea for including phases in a domain.
+                                  #         designed to give some overlap in neighbouring domians for reduce edge effects...
+                        pp2mp =
                     # Now add Path to XML file
                     self.get_sac(ph)
                     # Now make XML for this Path
