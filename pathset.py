@@ -270,7 +270,9 @@ class PathSetter:
                     for i,dom in doms.iterrows():
                         crit =6.0 # [deg] - the distance criterea for including phases in a domain.
                                   #         designed to give some overlap in neighbouring domians for reduce edge effects...
-                        pp2mp =
+                        pp2mp = 
+
+
                     # Now add Path to XML file
                     self.get_sac(ph)
                     # Now make XML for this Path
