@@ -22,6 +22,7 @@ from shutil import copy
 import glob
 from calc_aoi import slw2aoi
 import numpy as np
+from obspy.clients import iris
 from sphe_trig import dist_deg
 ###############################
 __author__ = "Joseph Asplet"
@@ -229,7 +230,7 @@ class PathSetter:
 
             self.stat = stat
             sdf = self.df[self.df.STAT ==stat]
-
+            sdf = sdf.iloc[0:4]
             for i, row in sdf.iterrows():
                 # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
                 self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
@@ -267,39 +268,54 @@ class PathSetter:
                     phlon = '{}_PP_LON'.format(ph)
                     pplat = row[phlat]
                     pplon = row[phlon]
-                    for i,dom in doms.iterrows():
-                        crit =6.0 # [deg] - the distance criterea for including phases in a domain.
-                                  #         designed to give some overlap in neighbouring domians for reduce edge effects...
-                        pp2mp = 
+                    for j in ldoms:
+                        crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
+                                   #         designed to give some overlap in neighbouring domians for reduce edge effects...
+                        ldom = self.doms[self.doms.BIN == j]
+                        ldomlat = ldom.MID_LAT.values[0]
+                        ldomlon = ldom.MID_LON.values[0]
+                        pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
+                        print(i,j)
+                        if pp2mp <= crit:
 
+                            for k in udoms:
+                                udom = self.doms[self.doms.BIN == k]
+                                udomlat = udom.MID_LAT.values[0]
+                                udomlon = udom.MID_LON.values[0]
+                                st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
+                                if st2mp <= crit:
+                                    print("Lower Domain {}".format(ldom.BIN.values[0]))
+                                    print("Lower Domain {}".format(j))
+                                    print("Upper Domain {}".format(k))
+                                    op_LM = self.domain2operator("Lower_{}".format(j),ph)
+                                    op_UM = self.domain2operator("Upper_{}".format(k),ph)
+                                    # Now add Path to XML file
+                                    # self.get_sac(ph)
+                                    # Now make XML for this Path
+                                    path = ElementTree.SubElement(pathset,'path')
+                                    pathname = 'Path {} {}'.format(i,ph)
+                                    path_uid = ElementTree.SubElement(path,'path_uid')
+                                    path_uid.text = pathname
+                                    # Add Data (from .mts)
+                                    data = self.get_mts(ph)
+                                    path.append(data)
+                                    stat_uid = ElementTree.SubElement(path,'station_uid')
+                                    stat_uid.text = stat
+                                    evt_uid = ElementTree.SubElement(path,'event_uid')
+                                    evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                                    path.append(op_LM)
+                                    path.append(op_UM)
 
-                    # Now add Path to XML file
-                    self.get_sac(ph)
-                    # Now make XML for this Path
-                    path = ElementTree.SubElement(pathset,'path')
-                    pathname = 'Path {} {}'.format(i,ph)
-                    path_uid = ElementTree.SubElement(path,'path_uid')
-                    path_uid.text = pathname
-                    # Add Data (from .mts)
-                    data = self.get_mts(ph)
-                    path.append(data)
-                    stat_uid = ElementTree.SubElement(path,'station_uid')
-                    stat_uid.text = stat
-                    evt_uid = ElementTree.SubElement(path,'event_uid')
-                    evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
-                    path.append(op_LM)
-                    path.append(op_UM)
-
-        in_u_dom = u1+u2+u3+u4+u5+u6
-        print(dom_used)
-        print('Total Phases:', k)
-        print('Upper_01: {}, Upper_02: {}, Upper_03: {}, Upper_04: {}, Upper_05: {}, Upper_06: {}'.format(u1,u2,u3,u4,u5,u6))
-        print('Lower_01: {}, Lower_02: {}, Lower_03: {}, Lower_04: {}'.format(l1,l2,l3,l4))
-        print('Phases assigned an upper domain:', in_u_dom)
-        print('Phases not assigned a lower domain ', ex)
-        print('Fail Q tests:', q_fail)
-        print('Not Found:', nf)
-        print('Sanity test [0 if sane]: {}'.format(k-(in_u_dom+q_fail+nf)))
+        # in_u_dom = u1+u2+u3+u4+u5+u6
+        # print(dom_used)
+        # print('Total Phases:', k)
+        # print('Upper_01: {}, Upper_02: {}, Upper_03: {}, Upper_04: {}, Upper_05: {}, Upper_06: {}'.format(u1,u2,u3,u4,u5,u6))
+        # print('Lower_01: {}, Lower_02: {}, Lower_03: {}, Lower_04: {}'.format(l1,l2,l3,l4))
+        # print('Phases assigned an upper domain:', in_u_dom)
+        # print('Phases not assigned a lower domain ', ex)
+        # print('Fail Q tests:', q_fail)
+        # print('Not Found:', nf)
+        # print('Sanity test [0 if sane]: {}'.format(k-(in_u_dom+q_fail+nf)))
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
     def baz_test(self,baz):
