@@ -185,8 +185,10 @@ class PathSetter:
         dml = '{{{}}}domain'.format(self.xmlns['mtsML']) # need the triple curly braces to get a get of braces surrounding the mtsML
         udoms = []
         ldoms = []
+        print(dml)
         for dom in self.model.iter(dml):
             d_id = dom[0].text
+
             if d_id.split('_')[0] == 'Upper':
                 udoms.append(int(d_id.split('_')[1]))
             elif d_id.split('_')[0] == 'Lower':
@@ -223,14 +225,10 @@ class PathSetter:
         ex = 0
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
-
+        # print(udoms)
         for stat in self.stations:
-        # Loop over station list
-            print(stat)
-
             self.stat = stat
             sdf = self.df[self.df.STAT ==stat]
-            sdf = sdf.iloc[0:4]
             for i, row in sdf.iterrows():
                 # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
                 self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
@@ -246,13 +244,14 @@ class PathSetter:
                     #Each iteration of this loop is a seperate path (1 per phase and event)
                     f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
                     if (ph == 'SKS') and (row.Q_SKS > 0.5) or (row.Q_SKS < -0.7):
-                        print(' SKS Pass')
+                        # print(' SKS Pass')
+                        pass
                         # pass # no operation required other than to keep the loop iterating
                     elif (ph == 'SKKS') and (row.Q_SKKS > 0.5) or (row.Q_SKKS < -0.7) :
-                        print('SKKS Pass')
-                        # pass # Phase is SKKS and event is a clear split or null, so we can keep going
+                        # print('SKKS Pass')
+                        pass # Phase is SKKS and event is a clear split or null, so we can keep going
                     else:
-                        print('Phase {} fails Q tests, continuing to next'.format(ph))
+                        # print('Phase {} fails Q tests, continuing to next'.format(ph))
                         q_fail += 1
                         continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
                     try:
@@ -268,6 +267,7 @@ class PathSetter:
                     phlon = '{}_PP_LON'.format(ph)
                     pplat = row[phlat]
                     pplon = row[phlon]
+
                     for j in ldoms:
                         crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
                                    #         designed to give some overlap in neighbouring domians for reduce edge effects...
@@ -275,9 +275,8 @@ class PathSetter:
                         ldomlat = ldom.MID_LAT.values[0]
                         ldomlon = ldom.MID_LON.values[0]
                         pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
-                        print(i,j)
+                        # print(i,j)
                         if pp2mp <= crit:
-
                             for k in udoms:
                                 udom = self.doms[self.doms.BIN == k]
                                 udomlat = udom.MID_LAT.values[0]
@@ -285,12 +284,12 @@ class PathSetter:
                                 st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
                                 if st2mp <= crit:
                                     print("Lower Domain {}".format(ldom.BIN.values[0]))
-                                    print("Lower Domain {}".format(j))
+                                    # print("Lower Domain {}".format(j))
                                     print("Upper Domain {}".format(k))
                                     op_LM = self.domain2operator("Lower_{}".format(j),ph)
                                     op_UM = self.domain2operator("Upper_{}".format(k),ph)
                                     # Now add Path to XML file
-                                    # self.get_sac(ph)
+                                    self.get_sac(ph)
                                     # Now make XML for this Path
                                     path = ElementTree.SubElement(pathset,'path')
                                     pathname = 'Path {} {}'.format(i,ph)
@@ -305,7 +304,7 @@ class PathSetter:
                                     evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
                                     path.append(op_LM)
                                     path.append(op_UM)
-
+                                    # print('FOO')
         # in_u_dom = u1+u2+u3+u4+u5+u6
         # print(dom_used)
         # print('Total Phases:', k)
@@ -345,7 +344,7 @@ class PathSetter:
         s = ElementTree.SubElement(domain, 'strength', type="fixed",min="0.00",max="0.05",init="0.0125")
         return domain
 
-    def gen_Model_XML(self,mod_name=None,Low_Domains=None):
+    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Up_Domains=None):
         '''
         Generate a default Model XML file, containing all requested Lower Domains (default is all in .domains file)
         and all corresponding Upper domains.
@@ -360,11 +359,13 @@ class PathSetter:
 
         #find corresponding Upper Domains
         # first test outside of loop so we can append the rest into 1 Series more easily
-        u_df = self.df[(self.df['SKS_BIN'] == Low_Domains[0]) | (self.df['SKKS_BIN'] == Low_Domains[0])]['UPPER_BIN']
-        for i in range(1,len(Low_Domains)):
-            tmp = self.df[(self.df['SKS_BIN'] == Low_Domains[i]) | (self.df['SKKS_BIN'] == Low_Domains[i])]['UPPER_BIN']
-            u_df = u_df.append(tmp)
-        Up_Domains = u_df.drop_duplicates()
+        if Up_Domains is None:
+            print('Finding all corresponding Upper Domains')
+            u_df = self.df[(self.df['SKS_BIN'] == Low_Domains[0]) | (self.df['SKKS_BIN'] == Low_Domains[0])]['UPPER_BIN']
+            for i in range(1,len(Low_Domains)):
+                tmp = self.df[(self.df['SKS_BIN'] == Low_Domains[i]) | (self.df['SKKS_BIN'] == Low_Domains[i])]['UPPER_BIN']
+                u_df = u_df.append(tmp)
+            Up_Domains = u_df.drop_duplicates()
 
 
         # Write the xml
@@ -392,7 +393,6 @@ class PathSetter:
         self.model = m
         print('{} Upper domains, {} Lower domains'.format(u,l))
         self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,mod_name))
-
 
     def gen_MTS_Info(self):
         '''
