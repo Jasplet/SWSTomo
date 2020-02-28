@@ -341,7 +341,7 @@ class PathSetter:
         beta = ElementTree.SubElement(domain, 'beta', type="fixed",value="0")
         gamma = ElementTree.SubElement(domain, 'gamma', type="periodic",min="-90",max="90",init="0")
         domain.append(ElementTree.Comment('<gamma  type="fixed" value="-30"/>'))
-        s = ElementTree.SubElement(domain, 'strength', type="fixed",min="0.00",max="0.05",init="0.0125")
+        s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
         return domain
 
     def gen_Model_XML(self,mod_name=None,Low_Domains=None,Up_Domains=None):
