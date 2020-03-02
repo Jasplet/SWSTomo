@@ -169,7 +169,7 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     # fig,ax = plt.subplots(1,1)
     # _plot_1d_ppd(ax,x,px_cppd,dp_x)
     if sv is True:
-        plt.savefig('/Users/ja17375/SWSTomo/Figures/E_pac_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
+        plt.savefig('MPPD_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
 
 if __name__ == "__main__":
     # If this script is being run from the command line
@@ -177,15 +177,16 @@ if __name__ == "__main__":
     ## Parse argueemnts
     parser = argparse.ArgumentParser()
     parser.add_argument("-s","--save",action="store_true",help="saves MPPD plots")
+    parser.add_argument("-f","--filename",default="plot",action="store",type="str",help="file name that will be appended to MPPD_xxx")
     args = parser.parse_args()
 
     if args.save:
         print('Plots will be saved')
-        f_uid = input('Enter Unique Identifier for the MPPD plots: ')
+        # f_uid = input('Enter Unique Identifier for the MPPD plots: ')
         sv = True
     else:
         print('Not Saving')
-        f_uid='placeholder'
+        # f_uid='placeholder'
         sv = False
 
     n = glob('MTS_2D_MPPD*.xy')
