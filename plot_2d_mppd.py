@@ -194,7 +194,7 @@ if __name__ == "__main__":
     idx.sort() # sort idx in ascending order (for tidyness sake)
     for i in idx:
         print(i)
-        plot_2d_mppd(i,sv,f_uid)
+        plot_2d_mppd(i,sv,args.filename)
     # Do stuff (plotting mainly)
     plt.show()
 # EOF
