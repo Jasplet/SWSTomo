@@ -159,8 +159,8 @@ class PathSetter:
             # else:
             #     print('Domain {} is not in Model!'.format(uid_tmp))
 
-        aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-        # aoi = 0 # Assume rays are vertical, not true but using this for testing.
+        # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        aoi = 0 # Assume rays are vertical, not true but using this for testing.
         dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
@@ -168,12 +168,12 @@ class PathSetter:
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
         dom_uid.text = domain
         azimuth = ElementTree.SubElement(operator,'azi')
-        azimuth.text = str(self.az)
-        # azimuth.text = '0'
+        # azimuth.text = str(self.az)
+        azimuth.text = '0'
         inclination = ElementTree.SubElement(operator,'inc')
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
-        l.text = str(dist)
+        l.text = str(np.around(dist,decimals=3s
 
         return operator
 
