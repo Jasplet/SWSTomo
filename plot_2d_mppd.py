@@ -177,7 +177,7 @@ if __name__ == "__main__":
     ## Parse argueemnts
     parser = argparse.ArgumentParser()
     parser.add_argument("-s","--save",action="store_true",help="saves MPPD plots")
-    parser.add_argument("-f","--filename",default="plot",action="store",type="str",help="file name that will be appended to MPPD_xxx")
+    parser.add_argument("-f","--filename",default="plot",action="store",type=str,help="file name that will be appended to MPPD_xxx")
     args = parser.parse_args()
 
     if args.save:
