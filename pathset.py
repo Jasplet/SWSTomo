@@ -50,12 +50,24 @@ class PathSetter:
             model [str]   - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
             config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
-    def __init__(self,df_file,ddir,domains,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
+    def __init__(self,file1,phase1,ddir,domains,file2=None,phase2=None,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
 
-        print(df_file)
+        self.phases = []
         print('Reading df')
         date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
-        df_in = pd.read_csv(df_file,converters=date_time_convert,delim_whitespace=True)
+        self.df1 = pd.read_csv(file1,converters=date_time_convert,delim_whitespace=True)
+        stat1 = self.df1[['STAT','STLA','STLO']]
+        [self.phases.append(p) for p in phase1] # do list comp to handle a list of phases being specified
+        if file2 is not None:
+            print('Second data file added, reading')
+            self.df2 = pd.read_csv(file2,converters=date_time_convert,delim_whitespace=True)
+            stat2 = self.df2[['STAT','STLA','STLO']]
+            stations = stat1.append(stat2)
+            [self.phases.append(p) for p in phase2]
+
+        self.stations = stations.drop_duplicates()
+        print('There are {} stations in the dataset'.format(len(self.stations)))
+        print('Phases specified are: ', self.phases)
         print('Read Trigonal Domians file')
         self.doms = pd.read_csv(domains,delim_whitespace=True)
         print('Set Outdir')
@@ -87,14 +99,6 @@ class PathSetter:
             model_name = self.model[0].text
             print('Using model named ... {}'.format(model_name))
 
-        if station == None:
-            stat_check = pd.read_csv('/Users/ja17375/SWSTomo/Jacks_stats_in_Epac.txt',delim_whitespace=True)
-            self.stations = stat_check.STA
-            self.df = df_in
-            # print(self.stations)
-        else:
-            self.stations = station
-            self.df = df_in[df_in['STAT'].isin(station)]
 
         self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
@@ -173,7 +177,7 @@ class PathSetter:
         inclination = ElementTree.SubElement(operator,'inc')
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
-        l.text = str(np.around(dist,decimals=3s
+        l.text = str(np.around(dist,decimals=3))
 
         return operator
 
@@ -197,7 +201,7 @@ class PathSetter:
         return (udoms,ldoms)
 
 
-    def gen_PathSet_XML(self,phases=['SKS','SKKS'],fname=None):
+    def gen_PathSet_XML(self,phases=['ScS','SKS','SKKS'],fname=None):
         '''
         Function to iterate over the DataFrame and construct the XML we need
         Phases [list] - list of phase codes to iterate over (assuming each row in the DataFame corresponds to all phases)
