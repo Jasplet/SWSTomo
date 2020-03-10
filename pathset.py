@@ -55,15 +55,17 @@ class PathSetter:
         self.phases = []
         print('Reading df')
         date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
-        self.df1 = pd.read_csv(file1,converters=date_time_convert,delim_whitespace=True)
-        stat1 = self.df1[['STAT','STLA','STLO']]
+        self.df_snks = pd.read_csv(file1,converters=date_time_convert,delim_whitespace=True)
+        stat1 = self.df_snks[['STAT','STLA','STLO']]
         [self.phases.append(p) for p in phase1] # do list comp to handle a list of phases being specified
         if file2 is not None:
             print('Second data file added, reading')
-            self.df2 = pd.read_csv(file2,converters=date_time_convert,delim_whitespace=True)
-            stat2 = self.df2[['STAT','STLA','STLO']]
+            self.df_scs = pd.read_csv(file2,converters=date_time_convert,delim_whitespace=True)
+            stat2 = self.df_scs[['STAT','STLA','STLO']]
             stations = stat1.append(stat2)
             [self.phases.append(p) for p in phase2]
+        else:
+            self.df_scs = None
 
         self.stations = stations.drop_duplicates()
         print('There are {} stations in the dataset'.format(len(self.stations)))
@@ -232,7 +234,7 @@ class PathSetter:
         # print(udoms)
         for stat in self.stations:
             self.stat = stat
-            sdf = self.df[self.df.STAT ==stat]
+            sdf = self.df_snks[self.df_snks.STAT ==stat]
             for i, row in sdf.iterrows():
                 # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
                 self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
@@ -348,29 +350,43 @@ class PathSetter:
         s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
         return domain
 
-    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Up_Domains=None):
+    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,):
         '''
         Generate a default Model XML file, containing all requested Lower Domains (default is all in .domains file)
         and all corresponding Upper domains.
         '''
         if Low_Domains is None:
             print('Using all domains in .domains file')
-            lowb = self.df.SKS_BIN.append(self.df.SKKS_BIN)
-            Low_Domains = lowb.drop_duplicates().values
+            lowb = self.df_snks.SKS_BIN.append(self.df_snks.SKKS_BIN)
+            if self.df_scs is not None:
+                lowb2 = lowb.append(self.df_scs.LOWMM_BIN)
+            Low_Domains = lowb2.drop_duplicates()
 
         if mod_name is None:
             mod_name = input('No model name provided. Enter one now :')
 
-        #find corresponding Upper Domains
+        #find corresponding Upper (reciever side) Domains
         # first test outside of loop so we can append the rest into 1 Series more easily
-        if Up_Domains is None:
+        if Rside_Domains is None:
             print('Finding all corresponding Upper Domains')
-            u_df = self.df[(self.df['SKS_BIN'] == Low_Domains[0]) | (self.df['SKKS_BIN'] == Low_Domains[0])]['UPPER_BIN']
-            for i in range(1,len(Low_Domains)):
-                tmp = self.df[(self.df['SKS_BIN'] == Low_Domains[i]) | (self.df['SKKS_BIN'] == Low_Domains[i])]['UPPER_BIN']
-                u_df = u_df.append(tmp)
-            Up_Domains = u_df.drop_duplicates()
+            rside_sks = self.df_snks[self.df_snks['SKS_BIN'].isin(Low_Domains.values)]
+            rside_skks = self.df_snks[self.df_snks['SKKS_BIN'].isin(Low_Domains.values)]
+            rdf = rside_sks.append(rside_skks)
+            if self.df_scs is not None:
+                rside_scs = self.df_scs[sefl.df2['LOWMM_BIN'].isin(Low_Domains.values)]
+                rdf = rdf.append(rside_scs)
+            # u_df = self.df_snks[(self.df_snks['SKS_BIN'] == Low_Domains[0]) | (self.df_snks['SKKS_BIN'] == Low_Domains[0])]['RSIDE_BIN']
+            # for i in range(1,len(Low_Domains)):
+            #     tmp = self.df_snks[(self.df_snks['SKS_BIN'] == Low_Domains[i]) | (self.df_snks['SKKS_BIN'] == Low_Domains[i])]['RSIDE_BIN']
+            #     u_df = u_df.append(tmp)
+            #     if self.df_scs is not None:
+                    # tmp2 = self.df_scs[(self.df_scs['LOWMM_BIN'] == Low_Domains[i])]['RSIDE_BIN']
+                    # u_df = u_df.append(tmp2)
+            Rside_Domains = rdf.drop_duplicates()
 
+        if Sside_Domains is None:
+            # Only ScS will have Source-side domains so we just want to test df2
+            sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains.values)]
 
         # Write the xml
         root = ElementTree.Element('MatisseML')
