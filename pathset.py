@@ -373,7 +373,7 @@ class PathSetter:
             rside_skks = self.df_snks[self.df_snks['SKKS_BIN'].isin(Low_Domains.values)]
             rdf = rside_sks.append(rside_skks)
             if self.df_scs is not None:
-                rside_scs = self.df_scs[sefl.df2['LOWMM_BIN'].isin(Low_Domains.values)]
+                rside_scs = self.df_scs[self.df2['LOWMM_BIN'].isin(Low_Domains.values)]
                 rdf = rdf.append(rside_scs)
             # u_df = self.df_snks[(self.df_snks['SKS_BIN'] == Low_Domains[0]) | (self.df_snks['SKKS_BIN'] == Low_Domains[0])]['RSIDE_BIN']
             # for i in range(1,len(Low_Domains)):
