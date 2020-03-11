@@ -79,7 +79,7 @@ class PathSetter:
         else:
             self.opath = '/Users/ja17375/SWSTomo/BluePebble/{}'.format(odir)
         # Link to data directory in /Users/ja17375/SWSTomo/BluePebble/E_pacific
-        os.symlink('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data','{}/data'.format(self.opath))
+        # os.symlink('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data','{}/data'.format(self.opath))
         # Set XML namespace
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
 
@@ -104,18 +104,17 @@ class PathSetter:
             print('Using model named ... {}'.format(model_name))
 
 
-        self.ddir = ddir # Data directory (hopefully)
         self.dom_h = 250 # [km] height of the domains (fixed for UM and D'' for now!)
 
         # Set config uID
         self.config_uid = config_uid
 
-    def get_mts(self,phase):
+    def get_mts(self,mts):
         '''Function to get the .mts file for a phase and read in the xml.
-           Phase [str] - SKS or SKKS (as my sheba runs are split by phase)
-           fileID [str] - file name (.mts is appended here) [ now an attribute of Setter class]
+
+           mts [str] - the mts file name
         '''
-        mts = '{}/{}/{}/{}.mts'.format(self.ddir,self.stat,phase,self.fileID)
+
         xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
         data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                      # the bigger Pathset XML file
@@ -138,7 +137,10 @@ class PathSetter:
                 print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(self.fileID,comp))
             else:
                 print('File not found, copying from Sheba Run Dir E_pacific if possible')
-                file = '{}/{}/{}/{}.BH{}'.format(self.ddir,self.stat,phase,self.fileID,comp)
+                if ph is 'ScS':
+                    file = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}.BH{}'.format(self.stat,phase,self.fileID,comp)
+                else:
+                    file = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}.BH{}'.format(self.stat,phase,self.fileID,comp)
                 dst = '/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(self.fileID,comp)
                 p = copy(file, dst)
 
@@ -189,7 +191,6 @@ class PathSetter:
         '''
 
         '''
-
         dml = '{{{}}}domain'.format(self.xmlns['mtsML']) # need the triple curly braces to get a get of braces surrounding the mtsML
         udoms = []
         ldoms = []
@@ -233,9 +234,18 @@ class PathSetter:
         ex = 0
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
-        # print(udoms)
-
-        for i, row in self.df_snks.iterrows():
+        crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
+                   #         designed to give some overlap in neighbouring domians for reduce edge effects...
+        ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
+        rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
+        ScSrows = ['Q','SNR','BNCLAT','BNCLON']
+        SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
+        ScS_t = self.df_scs[rows2comp + ScSrows]
+        SnKS_t = self.df_snks[rows2comp + SnKSrows]
+        pdf = pd.concat([SnKS_t,ScS_t],sort=False)
+        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON','SKS_PP_LAT':'SKS_LM_LAT'
+                           ,'SKS_PP_LON':'SKS_LM_LON','SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
+        for i, row in pdf.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
             self.az = row.AZI
@@ -247,16 +257,20 @@ class PathSetter:
             stat = row.STAT
             date = row.DATE
             time = row.TIME
+            self.stat = stat
             for ph in phases:
+                print(ph)
                 k = k + 1
                 #Each iteration of this loop is a seperate path (1 per phase and event)
-                f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,date,time,ph)
+                if ph is 'ScS':
+                    f = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
+                else:
+                    f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
                 Q = 'Q_{}'.format(ph)
-                if row[Q] < 0.5) and (row[Q] > -0.7):
-                    # print('Phase {} fails Q tests, continuing to next'.format(ph))
+                if (row[Q] < 0.5) and (row[Q] > -0.7):
+                    print('Phase {} fails Q tests, continuing to next'.format(ph))
                     q_fail += 1
                     continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
-
                 try:
                     self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                 except IndexError:
@@ -264,21 +278,16 @@ class PathSetter:
                     nf += 1
                     continue
                 # Now we need to select the correct domains and in the right order (order of operators).
-                phlat = '{}_PP_LAT'.format(ph)
-                phlon = '{}_PP_LON'.format(ph)
-                pplat = row[phlat]
-                pplon = row[phlon]
+                phlat = '{}_LM_LAT'.format(ph)
+                phlon = '{}_LM_LON'.format(ph)
+                lmlat = row[phlat]
+                lmlon = row[phlon]
 
-
-        def loop_tru_doms(self,udoms,ldoms):
-            crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
-                       #         designed to give some overlap in neighbouring domians for reduce edge effects...
             for j in ldoms:
-
                 ldom = self.doms[self.doms.BIN == j]
                 ldomlat = ldom.MID_LAT.values[0]
                 ldomlon = ldom.MID_LON.values[0]
-                pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
+                pp2mp = dist_client.distaz(lmlat,lmlon,ldomlat,ldomlon)['distance']
                 # print(i,j)
                 if pp2mp <= crit:
                     print("Lower Domain {}".format(j))
@@ -288,9 +297,19 @@ class PathSetter:
                         udomlat = udom.MID_LAT.values[0]
                         udomlon = udom.MID_LON.values[0]
                         st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
+
                         if st2mp <= crit:
-                            print("Upper Domain {}".format(k))
-                            op_UM = self.domain2operator("Upper_{}".format(k),ph)
+                            print("RSide Domain {}".format(k))
+                            op_RS = self.domain2operator("Upper_{}".format(k),ph)
+                            if ph == 'ScS':
+                                # Need a source side domain also for ScS
+                                for l in udoms: # Loop through udoms again to find
+                                    ev2mp = dist_client.distaz(evla,evlo,udom.MID_LAT.values[0],udom.MIN_LON.values[0])['distance']
+                                    if ev2mp <= crit:
+                                        print('Source Side Domain (ScS) {}'.format(k))
+                                        op_SS = self.domain2operator("Upper_{}".format(k),ph)
+                            else:
+                                op_SS = None
                             # Now add Path to XML file
                             self.get_sac(ph)
                             # Now make XML for this Path
@@ -299,25 +318,18 @@ class PathSetter:
                             path_uid = ElementTree.SubElement(path,'path_uid')
                             path_uid.text = pathname
                             # Add Data (from .mts)
-                            data = self.get_mts(ph)
+                            data = self.get_mts(f)
                             path.append(data)
                             stat_uid = ElementTree.SubElement(path,'station_uid')
                             stat_uid.text = stat
                             evt_uid = ElementTree.SubElement(path,'event_uid')
                             evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                            if op_SS is not None:
+                                path.append(op_SS)
                             path.append(op_LM)
-                            path.append(op_UM)
+                            path.append(op_RS)
                             # print('FOO')
-        # in_u_dom = u1+u2+u3+u4+u5+u6
-        # print(dom_used)
-        # print('Total Phases:', k)
-        # print('Upper_01: {}, Upper_02: {}, Upper_03: {}, Upper_04: {}, Upper_05: {}, Upper_06: {}'.format(u1,u2,u3,u4,u5,u6))
-        # print('Lower_01: {}, Lower_02: {}, Lower_03: {}, Lower_04: {}'.format(l1,l2,l3,l4))
-        # print('Phases assigned an upper domain:', in_u_dom)
-        # print('Phases not assigned a lower domain ', ex)
-        # print('Fail Q tests:', q_fail)
-        # print('Not Found:', nf)
-        # print('Sanity test [0 if sane]: {}'.format(k-(in_u_dom+q_fail+nf)))
+        # End of all the looping. Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
     def baz_test(self,baz):
