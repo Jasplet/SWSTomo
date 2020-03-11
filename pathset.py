@@ -78,6 +78,8 @@ class PathSetter:
             self.odir = self.opath.split('/')[-1]
         else:
             self.opath = '/Users/ja17375/SWSTomo/BluePebble/{}'.format(odir)
+        # Link to data directory in /Users/ja17375/SWSTomo/BluePebble/E_pacific
+        os.symlink('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data','{}/data'.format(self.opath))
         # Set XML namespace
         self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
 
@@ -131,13 +133,13 @@ class PathSetter:
            fileID [str] - file name (.mts is appended here) (now an attribute)
         '''
         for comp in ['E','N','Z']:
-            f = Path('{}/data/{}.BH{}'.format(self.opath,self.fileID,comp))
+            f = Path('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(self.fileID,comp))
             if f.is_file():
-                print('./data/{}.BH{} exists, not copying'.format(self.fileID,comp))
+                print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(self.fileID,comp))
             else:
                 print('File not found, copying from Sheba Run Dir E_pacific if possible')
                 file = '{}/{}/{}/{}.BH{}'.format(self.ddir,self.stat,phase,self.fileID,comp)
-                dst = '{}/data/{}.BH{}'.format(self.opath,self.fileID,comp)
+                dst = '/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(self.fileID,comp)
                 p = copy(file, dst)
 
     def domain2operator(self,domain,phase):
@@ -232,40 +234,40 @@ class PathSetter:
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
         # print(udoms)
-        for stat in self.stations:
-            self.stat = stat
-            sdf = self.df_snks[self.df_snks.STAT ==stat]
-            for i, row in sdf.iterrows():
-                # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-                self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
-                self.az = row.AZI
-                self.gcarc = row.DIST
-                evla = row.EVLA
-                evlo = row.EVLO
-                stla = row.STLA
-                stlo = row.STLO
 
-                for ph in phases:
-                    k = k + 1
-                    #Each iteration of this loop is a seperate path (1 per phase and event)
-                    f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
-                    Q = 'Q_{}'.format(ph)
-                    if row[Q] < 0.5) and (row[Q] > -0.7):
-                        # print('Phase {} fails Q tests, continuing to next'.format(ph))
-                        q_fail += 1
-                        continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
+        for i, row in self.df_snks.iterrows():
+            # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
+            self.evdp = row.EVDP # read out event depth [km]. Attrib as needed for path length calcs.
+            self.az = row.AZI
+            self.gcarc = row.DIST
+            evla = row.EVLA
+            evlo = row.EVLO
+            stla = row.STLA
+            stlo = row.STLO
+            stat = row.STAT
+            date = row.DATE
+            time = row.TIME
+            for ph in phases:
+                k = k + 1
+                #Each iteration of this loop is a seperate path (1 per phase and event)
+                f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,date,time,ph)
+                Q = 'Q_{}'.format(ph)
+                if row[Q] < 0.5) and (row[Q] > -0.7):
+                    # print('Phase {} fails Q tests, continuing to next'.format(ph))
+                    q_fail += 1
+                    continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
 
-                    try:
-                        self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
-                    except IndexError:
-                        print('File {} Not found'.format(f))
-                        nf += 1
-                        continue
-                    # Now we need to select the correct domains and in the right order (order of operators).
-                    phlat = '{}_PP_LAT'.format(ph)
-                    phlon = '{}_PP_LON'.format(ph)
-                    pplat = row[phlat]
-                    pplon = row[phlon]
+                try:
+                    self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
+                except IndexError:
+                    print('File {} Not found'.format(f))
+                    nf += 1
+                    continue
+                # Now we need to select the correct domains and in the right order (order of operators).
+                phlat = '{}_PP_LAT'.format(ph)
+                phlon = '{}_PP_LON'.format(ph)
+                pplat = row[phlat]
+                pplon = row[phlon]
 
 
         def loop_tru_doms(self,udoms,ldoms):
@@ -279,16 +281,15 @@ class PathSetter:
                 pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
                 # print(i,j)
                 if pp2mp <= crit:
+                    print("Lower Domain {}".format(j))
+                    op_LM = self.domain2operator("Lower_{}".format(j),ph)
                     for k in udoms:
                         udom = self.doms[self.doms.BIN == k]
                         udomlat = udom.MID_LAT.values[0]
                         udomlon = udom.MID_LON.values[0]
                         st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
                         if st2mp <= crit:
-                            print("Lower Domain {}".format(ldom.BIN.values[0]))
-                            # print("Lower Domain {}".format(j))
                             print("Upper Domain {}".format(k))
-                            op_LM = self.domain2operator("Lower_{}".format(j),ph)
                             op_UM = self.domain2operator("Upper_{}".format(k),ph)
                             # Now add Path to XML file
                             self.get_sac(ph)
