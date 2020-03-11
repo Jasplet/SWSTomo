@@ -249,17 +249,12 @@ class PathSetter:
                     k = k + 1
                     #Each iteration of this loop is a seperate path (1 per phase and event)
                     f = '{}/{}/{}/{}_{}_{}??_{}.mts'.format(self.ddir,stat,ph,stat,row.DATE,row.TIME,ph)
-                    if (ph == 'SKS') and (row.Q_SKS > 0.5) or (row.Q_SKS < -0.7):
-                        # print(' SKS Pass')
-                        pass
-                        # pass # no operation required other than to keep the loop iterating
-                    elif (ph == 'SKKS') and (row.Q_SKKS > 0.5) or (row.Q_SKKS < -0.7) :
-                        # print('SKKS Pass')
-                        pass # Phase is SKKS and event is a clear split or null, so we can keep going
-                    else:
+                    Q = 'Q_{}'.format(ph)
+                    if row[Q] < 0.5) and (row[Q] > -0.7):
                         # print('Phase {} fails Q tests, continuing to next'.format(ph))
                         q_fail += 1
                         continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
+
                     try:
                         self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                     except IndexError:
@@ -267,50 +262,51 @@ class PathSetter:
                         nf += 1
                         continue
                     # Now we need to select the correct domains and in the right order (order of operators).
-                    # As the model get more complex these tests will have to get more "clever"
-                    # Hardcoded for now, need to get a function to read Model.xml (possibly as part of __init__)
                     phlat = '{}_PP_LAT'.format(ph)
                     phlon = '{}_PP_LON'.format(ph)
                     pplat = row[phlat]
                     pplon = row[phlon]
 
-                    for j in ldoms:
-                        crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
-                                   #         designed to give some overlap in neighbouring domians for reduce edge effects...
-                        ldom = self.doms[self.doms.BIN == j]
-                        ldomlat = ldom.MID_LAT.values[0]
-                        ldomlon = ldom.MID_LON.values[0]
-                        pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
-                        # print(i,j)
-                        if pp2mp <= crit:
-                            for k in udoms:
-                                udom = self.doms[self.doms.BIN == k]
-                                udomlat = udom.MID_LAT.values[0]
-                                udomlon = udom.MID_LON.values[0]
-                                st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
-                                if st2mp <= crit:
-                                    print("Lower Domain {}".format(ldom.BIN.values[0]))
-                                    # print("Lower Domain {}".format(j))
-                                    print("Upper Domain {}".format(k))
-                                    op_LM = self.domain2operator("Lower_{}".format(j),ph)
-                                    op_UM = self.domain2operator("Upper_{}".format(k),ph)
-                                    # Now add Path to XML file
-                                    self.get_sac(ph)
-                                    # Now make XML for this Path
-                                    path = ElementTree.SubElement(pathset,'path')
-                                    pathname = 'Path {} {}'.format(i,ph)
-                                    path_uid = ElementTree.SubElement(path,'path_uid')
-                                    path_uid.text = pathname
-                                    # Add Data (from .mts)
-                                    data = self.get_mts(ph)
-                                    path.append(data)
-                                    stat_uid = ElementTree.SubElement(path,'station_uid')
-                                    stat_uid.text = stat
-                                    evt_uid = ElementTree.SubElement(path,'event_uid')
-                                    evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
-                                    path.append(op_LM)
-                                    path.append(op_UM)
-                                    # print('FOO')
+
+        def loop_tru_doms(self,udoms,ldoms):
+            crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
+                       #         designed to give some overlap in neighbouring domians for reduce edge effects...
+            for j in ldoms:
+
+                ldom = self.doms[self.doms.BIN == j]
+                ldomlat = ldom.MID_LAT.values[0]
+                ldomlon = ldom.MID_LON.values[0]
+                pp2mp = dist_client.distaz(pplat,pplon,ldomlat,ldomlon)['distance']
+                # print(i,j)
+                if pp2mp <= crit:
+                    for k in udoms:
+                        udom = self.doms[self.doms.BIN == k]
+                        udomlat = udom.MID_LAT.values[0]
+                        udomlon = udom.MID_LON.values[0]
+                        st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
+                        if st2mp <= crit:
+                            print("Lower Domain {}".format(ldom.BIN.values[0]))
+                            # print("Lower Domain {}".format(j))
+                            print("Upper Domain {}".format(k))
+                            op_LM = self.domain2operator("Lower_{}".format(j),ph)
+                            op_UM = self.domain2operator("Upper_{}".format(k),ph)
+                            # Now add Path to XML file
+                            self.get_sac(ph)
+                            # Now make XML for this Path
+                            path = ElementTree.SubElement(pathset,'path')
+                            pathname = 'Path {} {}'.format(i,ph)
+                            path_uid = ElementTree.SubElement(path,'path_uid')
+                            path_uid.text = pathname
+                            # Add Data (from .mts)
+                            data = self.get_mts(ph)
+                            path.append(data)
+                            stat_uid = ElementTree.SubElement(path,'station_uid')
+                            stat_uid.text = stat
+                            evt_uid = ElementTree.SubElement(path,'event_uid')
+                            evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                            path.append(op_LM)
+                            path.append(op_UM)
+                            # print('FOO')
         # in_u_dom = u1+u2+u3+u4+u5+u6
         # print(dom_used)
         # print('Total Phases:', k)
@@ -360,7 +356,7 @@ class PathSetter:
             lowb = self.df_snks.SKS_BIN.append(self.df_snks.SKKS_BIN)
             if self.df_scs is not None:
                 lowb2 = lowb.append(self.df_scs.LOWMM_BIN)
-            Low_Domains = lowb2.drop_duplicates()
+            Low_Domains = lowb2.drop_duplicates().values
 
         if mod_name is None:
             mod_name = input('No model name provided. Enter one now :')
@@ -369,24 +365,23 @@ class PathSetter:
         # first test outside of loop so we can append the rest into 1 Series more easily
         if Rside_Domains is None:
             print('Finding all corresponding Upper Domains')
-            rside_sks = self.df_snks[self.df_snks['SKS_BIN'].isin(Low_Domains.values)]
-            rside_skks = self.df_snks[self.df_snks['SKKS_BIN'].isin(Low_Domains.values)]
+            rside_sks = self.df_snks[self.df_snks['SKS_BIN'].isin(Low_Domains)]['RSIDE_BIN']
+            rside_skks = self.df_snks[self.df_snks['SKKS_BIN'].isin(Low_Domains)]['RSIDE_BIN']
             rdf = rside_sks.append(rside_skks)
             if self.df_scs is not None:
-                rside_scs = self.df_scs[self.df2['LOWMM_BIN'].isin(Low_Domains.values)]
+                rside_scs = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['RSIDE_BIN']
                 rdf = rdf.append(rside_scs)
-            # u_df = self.df_snks[(self.df_snks['SKS_BIN'] == Low_Domains[0]) | (self.df_snks['SKKS_BIN'] == Low_Domains[0])]['RSIDE_BIN']
-            # for i in range(1,len(Low_Domains)):
-            #     tmp = self.df_snks[(self.df_snks['SKS_BIN'] == Low_Domains[i]) | (self.df_snks['SKKS_BIN'] == Low_Domains[i])]['RSIDE_BIN']
-            #     u_df = u_df.append(tmp)
-            #     if self.df_scs is not None:
-                    # tmp2 = self.df_scs[(self.df_scs['LOWMM_BIN'] == Low_Domains[i])]['RSIDE_BIN']
-                    # u_df = u_df.append(tmp2)
-            Rside_Domains = rdf.drop_duplicates()
+                # Now add Source side domains. These are also in the upper mantle
+                if Sside_Domains is None:
+                    # Only ScS will have Source-side domains so we just want to test df2
+                    sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['SSIDE_BIN']
 
-        if Sside_Domains is None:
-            # Only ScS will have Source-side domains so we just want to test df2
-            sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains.values)]
+            udf = rdf.append(sside)
+            Upper_Domains = udf.drop_duplicates().values
+            print(udf)
+        # if Sside_Domains is None:
+        #     # Only ScS will have Source-side domains so we just want to test df2
+        #     sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains.values)]
 
         # Write the xml
         root = ElementTree.Element('MatisseML')
@@ -398,16 +393,17 @@ class PathSetter:
         m_uid.text = 'Trigonal Domains'
 
         u,l = 0,0
-        for udom in Up_Domains:
-            dom = self.bin2domain('Upper_{}'.format(udom))
+        for udom in Upper_Domains:
+            dom = self.bin2domain('Upper_{}'.format(int(udom)))
             m.append(dom)
             u += 1
 
         for ldom in Low_Domains:
             # Loop over requested lower domains
-            dom = self.bin2domain('Lower_{}'.format(ldom))
+            dom = self.bin2domain('Lower_{}'.format(int(ldom)))
             m.append(dom)
             l+=1
+
 
         print('Model Generated')
         self.model = m
