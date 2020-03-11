@@ -7,7 +7,16 @@
 # Holds some useful spherical trig functions
 ###
 import numpy as np
+import math
 
+def geocen_lat(lat):
+    '''
+
+    '''
+    e2 = 6.69437999014E-3
+    gc_lat = math.atan((1-e2)* math.tan(lat))
+
+    return gc_lat
 
 def dist_deg(qlat,qlon,slat,slon):
     '''
@@ -18,17 +27,17 @@ def dist_deg(qlat,qlon,slat,slon):
     Available online at archive.org. Identifier: planeandspherica031803mbp
 
     '''
-    dlon = np.abs(qlon - slon)
-    sins = np.sin(np.radians(qlat))*np.sin(np.radians(slat))
-    coss = np.cos(np.radians(qlat))*np.cos(np.radians(slat))*np.cos(np.radians(dlon))
-    drad = np.arccos(sins + coss)
-    ddeg = np.rad2deg(drad)
-
+    lat1 = geocen_lat(qlat)
+    lat2 = geocen_lat(slat)
+    dlon = math.radians(qlon - slon)
+    dlat = math.radians(lat1 - lat2)
+    h = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2 # d = archav(h)
+    drad = 2 * math.atan2(math.sqrt(h), math.sqrt(1-h)) # arcsin(X) = arctan(X / sqrt( 1 - X^2))
+    ddeg = math.degrees(drad)
     return (np.around(ddeg,decimals=3))
 
 
-
-def geocen(arg):
+def geocen_colat(arg):
     '''
     input:
     arg    = geographic colatitude (radians)
