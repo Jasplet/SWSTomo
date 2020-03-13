@@ -5,18 +5,72 @@
 # Author: Joseph P.R. Asplet
 ##############################
 # Holds some useful spherical trig functions
+# vincenty_dist actually works. The other functions are a mish mash of other attempts and
+# ports of J.Wookeys STADIS2 (which also uses the vincenty formula but my port doesnt work... go figure)
+#
 ###
 import numpy as np
-import math
+from scipy import sin, cos, tan, arctan, arctan2, arccos, pi, deg2rad,rad2deg
 
-def geocen_lat(lat):
+def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
     '''
+    Calculates distance between two points on the WGS84 ellipsoid using the Vincety formula
+    Vincenty, T., Direct and Inverse Solutions of Geodesics on the Ellipsoid with application of nested equations, Surrey Review, XXIII (176)
+    https://www.ngs.noaa.gov/PUBS_LIB/inverse.pdf)
 
+    This implementation returns the angular distance between the two points, sigma, or the distance in km
     '''
-    e2 = 6.69437999014E-3
-    gc_lat = math.atan((1-e2)* math.tan(lat))
+    # Constants for WGS84
+    a = 6378137.0 #[m] length of semi-major axis (radius at equator)
+    f = 1/298.257223563 # flattening of the ellipsoid
+    b = (1 - f) * a  # [m] length of semi-minor axis  (radius at poles)
+    tol = t # tolerance for iterations to find L
+    #
+    phi1, phi2 = deg2rad(lat1), deg2rad(lat2) # convert to radians and name variabes to match Vincety forumula for sanitys sake
+    L1, L2 = deg2rad(lon1), deg2rad(lon2)
+    L = L2 - L1
+    # Calculate the reduced latitudes (latitude on the auxilliary sphere)
+    U1 = arctan((1-f)*tan(phi1))
+    U2 = arctan((1-f)*tan(phi2))
+    lam_old  = L
+    i = 0
+    while True:
+        i +=1
+        ss = (cos(U2)*sin(lam_old))**2
+        ss += (cos(U2)*sin(U2) - sin(U1)*cos(U2)*cos(lam_old))**2
+        sin_sigma = ss**0.5
+        cos_sigma = sin(U1)*sin(U2) + cos(U1)*cos(U2)*cos(lam_old)
+        sigma = arctan2(sin_sigma,cos_sigma)
 
-    return gc_lat
+        sin_alpha =  cos(U1)*cos(U2)*sin(lam_old) / sin_sigma
+        cos_sq_alpha = 1 - sin_alpha**2
+        cos_2_sig_m = cos_sigma - (2*sin(U1)*sin(U2)) / sin_sigma
+        C = f*cos_sq_alpha*(4 + f*(4 - 3*cos_sq_alpha)) / 16
+
+        s = sigma + C*sin_sigma*(cos_2_sig_m + C*cos_sigma*(-1 + 2*cos_2_sig_m**2))
+        lam_new = L + (1 - C)*f*sin_alpha*s
+
+        if abs(lam_old - lam_new) < tol:
+            lam = lam_new
+            
+            break
+        else:
+            lam_old = lam_new # reset lam_old and repeat
+    # # Once we have found lambda
+    u2 = cos_sq_alpha*((a**2 - b**2)/ b**2)
+    A = 1 + (u2/16384)**(4096 + u2*(-768 + u2*(320 - 175*u2)))
+    B = (u2/1024)*(256 + u2*(-128 + u2*(74 - 47*u2)))
+    ds = cos_2_sig_m + 0.25*B*(cos_sigma*(-1 + 2*cos_2_sig_m**2))
+    ds += B*cos_2_sig_m*(-3 + 4*sin_sigma**2)*(-3 + 4*cos_2_sig_m**2) / 6
+    delta_sigma = B*sin_sigma*ds
+    s = b*A*(sigma - delta_sigma) # Distance in km
+
+    if deg is True:
+        return np.around(rad2deg(sigma),decimals=4)
+    elif deg is False:
+        return np.around(s,decimals=4)
+    else:
+        print("deg is not Boolean")
 
 def dist_deg(qlat,qlon,slat,slon):
     '''
