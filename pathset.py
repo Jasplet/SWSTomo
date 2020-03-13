@@ -23,14 +23,13 @@ import glob
 from calc_aoi import slw2aoi
 import numpy as np
 from obspy.clients import iris
-from sphe_trig import dist_deg
+from sphe_trig import vincenty_dist
 ###############################
 __author__ = "Joseph Asplet"
 __license__ = "MIT"
 __version__ = "0.1"
 __email__ = "joseph.asplet@bristol.ac.uk"
 __status__ = "Development"
-
 
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
@@ -109,18 +108,22 @@ class PathSetter:
         # Set config uID
         self.config_uid = config_uid
 
-    def get_mts(self,mts):
+    def get_mts(self,phase):
         '''Function to get the .mts file for a phase and read in the xml.
-
-           mts [str] - the mts file name
+            Phase [str] - SKS or SKKS (as my sheba runs are split by phase)
+            fileID [str] - file name (.mts is appended here) [ now an attribute of Setter class]
         '''
-
+        if phase is 'ScS':
+            path = '/Users/ja17375/SWSTomo/ScS_data'
+        else:
+            path = '/Users/ja17375/SWSTomo/SnKS_data'
+        mts = '{}/{}/{}/{}.mts'.format(path,self.stat,phase,self.fileID)
         xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
         data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                      # the bigger Pathset XML file
         for file in ['file1','file2','file3']:# Loop over file tags to add in pointer to data dir
             f = data.find(file).text
-            print(f)
+            # print(f)
             f_new = 'data/{}'.format(f)
             data.find(file).text = f_new
 
@@ -134,10 +137,11 @@ class PathSetter:
         for comp in ['E','N','Z']:
             f = Path('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(self.fileID,comp))
             if f.is_file():
-                print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(self.fileID,comp))
+                # print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(self.fileID,comp))
+                pass
             else:
-                print('File not found, copying from Sheba Run Dir E_pacific if possible')
-                if ph is 'ScS':
+                # print('File not found, copying from Sheba Run Dir E_pacific if possible')
+                if phase is 'ScS':
                     file = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}.BH{}'.format(self.stat,phase,self.fileID,comp)
                 else:
                     file = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}.BH{}'.format(self.stat,phase,self.fileID,comp)
@@ -155,7 +159,7 @@ class PathSetter:
             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
 
             if uid_tmp == domain:
-                print('Domain {} Found'.format(uid_tmp))
+                # print('Domain {} Found'.format(uid_tmp))
                 uid = uid_tmp
                 if uid.split('_')[0] == 'Lower':
                     # Domains starting with Lower are at CMB. So depth == 2890 km
@@ -169,8 +173,8 @@ class PathSetter:
             # else:
             #     print('Domain {} is not in Model!'.format(uid_tmp))
 
-        # aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
-        aoi = 0 # Assume rays are vertical, not true but using this for testing.
+        aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        # aoi = 0 # Assume rays are vertical, not true but using this for testing.
         dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
         ## Now return what we need to make the opertor (will do this above?)
@@ -178,8 +182,8 @@ class PathSetter:
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
         dom_uid.text = domain
         azimuth = ElementTree.SubElement(operator,'azi')
-        # azimuth.text = str(self.az)
-        azimuth.text = '0'
+        azimuth.text = str(self.az)
+        # azimuth.text = '0'
         inclination = ElementTree.SubElement(operator,'inc')
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
@@ -205,6 +209,16 @@ class PathSetter:
 
         return (udoms,ldoms)
 
+    def is_uID(self,row,ph):
+        '''Function to test if a phase is not split or null based on its Q '''
+        Q = 'Q_{}'.format(ph)
+        if (row[Q] < 0.5) and (row[Q] > -0.7):
+            # print('Phase {} fails Q tests, continuing to next'.format(ph))
+            sn = False
+        else:
+            sn = True
+
+        return sn
 
     def gen_PathSet_XML(self,phases=['ScS','SKS','SKKS'],fname=None):
         '''
@@ -226,8 +240,6 @@ class PathSetter:
         pathset_uid.text = psuid
         dom_used = []
         ##
-        dist_client = iris.Client()
-        ##
         k = 0
         nf = 0 # counter for files not found
         q_fail = 0 # counter for pahses that fail Q test
@@ -242,7 +254,7 @@ class PathSetter:
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
         ScS_t = self.df_scs[rows2comp + ScSrows]
         SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        pdf = pd.concat([SnKS_t,ScS_t],sort=False)
+        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
         pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON','SKS_PP_LAT':'SKS_LM_LAT'
                            ,'SKS_PP_LON':'SKS_LM_LON','SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
         for i, row in pdf.iterrows():
@@ -259,76 +271,97 @@ class PathSetter:
             time = row.TIME
             self.stat = stat
             for ph in phases:
-                print(ph)
                 k = k + 1
                 #Each iteration of this loop is a seperate path (1 per phase and event)
                 if ph is 'ScS':
                     f = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
                 else:
                     f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
-                Q = 'Q_{}'.format(ph)
-                if (row[Q] < 0.5) and (row[Q] > -0.7):
-                    print('Phase {} fails Q tests, continuing to next'.format(ph))
-                    q_fail += 1
-                    continue  # SKS,SKKS phase is NOT a clear split or null, so we don't want to use it. continue to next iteration of loop
+
+                res = self.is_uID(row,ph)
                 try:
                     self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                 except IndexError:
-                    print('File {} Not found'.format(f))
+                    # print('File {} Not found'.format(f))
                     nf += 1
                     continue
-                # Now we need to select the correct domains and in the right order (order of operators).
-                phlat = '{}_LM_LAT'.format(ph)
-                phlon = '{}_LM_LON'.format(ph)
-                lmlat = row[phlat]
-                lmlon = row[phlon]
 
-            for j in ldoms:
-                ldom = self.doms[self.doms.BIN == j]
-                ldomlat = ldom.MID_LAT.values[0]
-                ldomlon = ldom.MID_LON.values[0]
-                pp2mp = dist_client.distaz(lmlat,lmlon,ldomlat,ldomlon)['distance']
-                # print(i,j)
-                if pp2mp <= crit:
-                    print("Lower Domain {}".format(j))
-                    op_LM = self.domain2operator("Lower_{}".format(j),ph)
-                    for k in udoms:
-                        udom = self.doms[self.doms.BIN == k]
-                        udomlat = udom.MID_LAT.values[0]
-                        udomlon = udom.MID_LON.values[0]
-                        st2mp = dist_client.distaz(stla,stlo,udomlat,udomlon)['distance']
+                if res is True:
+                    # Now we need to select the correct domains and in the right order (order of operators).
+                    phlat = '{}_LM_LAT'.format(ph)
+                    phlon = '{}_LM_LON'.format(ph)
+                    lmlat = row[phlat]
+                    lmlon = row[phlon]
 
-                        if st2mp <= crit:
-                            print("RSide Domain {}".format(k))
-                            op_RS = self.domain2operator("Upper_{}".format(k),ph)
-                            if ph == 'ScS':
-                                # Need a source side domain also for ScS
-                                for l in udoms: # Loop through udoms again to find
-                                    ev2mp = dist_client.distaz(evla,evlo,udom.MID_LAT.values[0],udom.MIN_LON.values[0])['distance']
-                                    if ev2mp <= crit:
-                                        print('Source Side Domain (ScS) {}'.format(k))
-                                        op_SS = self.domain2operator("Upper_{}".format(k),ph)
-                            else:
-                                op_SS = None
-                            # Now add Path to XML file
-                            self.get_sac(ph)
-                            # Now make XML for this Path
-                            path = ElementTree.SubElement(pathset,'path')
-                            pathname = 'Path {} {}'.format(i,ph)
-                            path_uid = ElementTree.SubElement(path,'path_uid')
-                            path_uid.text = pathname
-                            # Add Data (from .mts)
-                            data = self.get_mts(f)
-                            path.append(data)
-                            stat_uid = ElementTree.SubElement(path,'station_uid')
-                            stat_uid.text = stat
-                            evt_uid = ElementTree.SubElement(path,'event_uid')
-                            evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
-                            if op_SS is not None:
-                                path.append(op_SS)
-                            path.append(op_LM)
-                            path.append(op_RS)
-                            # print('FOO')
+                    for j in ldoms:
+                        ldom = self.doms[self.doms.BIN == j]
+                        ldomlat = ldom.MID_LAT.values[0]
+                        ldomlon = ldom.MID_LON.values[0]
+                        # print("Low doms distaz", lmlat,lmlon,ldomlat,ldomlon)
+                        pp2mp = vincenty_dist(lmlat,lmlon,ldomlat,ldomlon)
+                        # print(i,j)
+                        if pp2mp <= crit:
+                            # print("Lower Domain {}".format(j))
+                            op_LM = self.domain2operator("Lower_{}".format(j),ph)
+                            for k in udoms:
+                                udom = self.doms[self.doms.BIN == k]
+                                udomlat = udom.MID_LAT.values[0]
+                                udomlon = udom.MID_LON.values[0]
+                                # print("Rside doms distaz", stla,stlo,udomlat,udomlon)
+                                st2mp = vincenty_dist(stla,stlo,udomlat,udomlon)
+                                if st2mp <= crit:
+                                    # print("RSide Domain {}".format(k))
+                                    op_RS = self.domain2operator("Upper_{}".format(k),ph)
+                                    if ph == 'ScS':
+                                        # Need a source side domain also for ScS
+                                        for l in udoms: # Loop through udoms again to find
+                                            udom = self.doms[self.doms.BIN == l]
+                                            udomlat = udom.MID_LAT.values[0]
+                                            udomlon = udom.MID_LON.values[0]
+                                            ev2mp = vincenty_dist(evla,evlo,udomlat,udomlon)
+                                            if ev2mp <= crit:
+                                                print('Source Side Domain (ScS) {}'.format(l))
+                                                op_SS = self.domain2operator("Upper_{}".format(l),ph)
+
+                                                # Now add Path to XML file
+                                                # print(ph)
+                                                self.get_sac(ph)
+                                                # Now make XML for this Path
+                                                path = ElementTree.SubElement(pathset,'path')
+                                                pathname = 'Path {} {}'.format(i,ph)
+                                                path_uid = ElementTree.SubElement(path,'path_uid')
+                                                path_uid.text = pathname
+                                                # Add Data (from .mts)
+                                                data = self.get_mts(ph)
+                                                path.append(data)
+                                                stat_uid = ElementTree.SubElement(path,'station_uid')
+                                                stat_uid.text = stat
+                                                evt_uid = ElementTree.SubElement(path,'event_uid')
+                                                evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                                                path.append(op_SS)
+                                                path.append(op_LM)
+                                                path.append(op_RS)
+                                    else:
+                                        # Now add Path to XML file
+                                        # print(ph)
+                                        self.get_sac(ph)
+                                        # Now make XML for this Path
+                                        path = ElementTree.SubElement(pathset,'path')
+                                        pathname = 'Path {} {}'.format(i,ph)
+                                        path_uid = ElementTree.SubElement(path,'path_uid')
+                                        path_uid.text = pathname
+                                        # Add Data (from .mts)
+                                        data = self.get_mts(ph)
+                                        path.append(data)
+                                        stat_uid = ElementTree.SubElement(path,'station_uid')
+                                        stat_uid.text = stat
+                                        evt_uid = ElementTree.SubElement(path,'event_uid')
+                                        evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
+                                        path.append(op_LM)
+                                        path.append(op_RS)
+                                        # print('FOO')
+                else:
+                    q_fail +=1
         # End of all the looping. Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
@@ -391,7 +424,18 @@ class PathSetter:
 
             udf = rdf.append(sside)
             Upper_Domains = udf.drop_duplicates().values
-            print(udf)
+
+        elif Sside_Domains is None:
+            # Only ScS will have Source-side domains so we just want to test df2
+            sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['SSIDE_BIN']
+            sside = sside.drop_duplicates().values.tolist()
+            print(sside)
+            Upper_Domains = sside + Rside_Domains
+
+        else:
+            Upper_Domains = Sside_Domains + Rside_Domains
+
+        print(Upper_Domains)
         # if Sside_Domains is None:
         #     # Only ScS will have Source-side domains so we just want to test df2
         #     sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains.values)]
