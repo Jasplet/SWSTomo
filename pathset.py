@@ -214,7 +214,7 @@ class PathSetter:
 
         return (udoms,ldoms)
 
-    def is_uID(self,row,ph):
+    def is_phase_good(self,row,ph):
         '''Function to test if a phase is not split or null based on its Q '''
         Q = 'Q_{}'.format(ph)
         if (row[Q] < 0.5) and (row[Q] > -0.7):
@@ -252,7 +252,7 @@ class PathSetter:
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
         print(self.ldom_c)
-        crit = 5 # [deg] - the distance criterea for including phases in a domain.
+        crit = 5.5 # [deg] - the distance criterea for including phases in a domain.
                    #         designed to give some overlap in neighbouring domians for reduce edge effects...
         ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
         rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
@@ -277,14 +277,14 @@ class PathSetter:
             time = row.TIME
             self.stat = stat
             for ph in phases:
-                k = k + 1
+                k += 1
                 #Each iteration of this loop is a seperate path (1 per phase and event)
                 if ph is 'ScS':
                     f = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
                 else:
                     f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(stat,ph,stat,date,time,ph)
 
-                res = self.is_uID(row,ph)
+                ph_good = self.is_phase_good(row,ph) # Test if phases are "good" splits or nulls
                 try:
                     self.fileID = glob.glob(f)[0].strip('.mts').split('/')[-1] # Strip out .mts and split by '/', select end to get filestem
                 except IndexError:
@@ -292,7 +292,7 @@ class PathSetter:
                     nf += 1
                     continue
 
-                if res is True:
+                if ph_good is True:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     phlat = '{}_LM_LAT'.format(ph)
                     phlon = '{}_LM_LON'.format(ph)
@@ -303,34 +303,31 @@ class PathSetter:
                         ldom = self.doms[self.doms.BIN == j]
                         ldomlat = ldom.MID_LAT.values[0]
                         ldomlon = ldom.MID_LON.values[0]
+                        ldom_id = "Lower_{}".format(j)
                         # print("Low doms distaz", lmlat,lmlon,ldomlat,ldomlon)
                         pp2mp = vincenty_dist(lmlat,lmlon,ldomlat,ldomlon)
-                        # print(i,j)
                         if pp2mp <= crit:
-                            # print("Lower Domain {}".format(j))
                             op_LM = self.domain2operator("Lower_{}".format(j),ph)
-                            for k in udoms:
-                                udom = self.doms[self.doms.BIN == k]
-                                udomlat = udom.MID_LAT.values[0]
-                                udomlon = udom.MID_LON.values[0]
+                            for r in udoms:
+                                rsdom = self.doms[self.doms.BIN == r]
+                                rsdomlat = rsdom.MID_LAT.values[0]
+                                rsdomlon = rsdom.MID_LON.values[0]
                                 # print("Rside doms distaz", stla,stlo,udomlat,udomlon)
-                                st2mp = vincenty_dist(stla,stlo,udomlat,udomlon)
+                                st2mp = vincenty_dist(stla,stlo,rsdomlat,rsdomlon)
                                 if st2mp <= crit:
                                     # print("RSide Domain {}".format(k))
                                     op_RS = self.domain2operator("Upper_{}".format(k),ph)
                                     if ph == 'ScS':
                                         # Need a source side domain also for ScS
-                                        for l in udoms: # Loop through udoms again to find
-                                            udom = self.doms[self.doms.BIN == l]
-                                            udomlat = udom.MID_LAT.values[0]
-                                            udomlon = udom.MID_LON.values[0]
-                                            ev2mp = vincenty_dist(evla,evlo,udomlat,udomlon)
+                                        for s in udoms: # Loop through udoms again to find
+                                            ssdom = self.doms[self.doms.BIN == s]
+                                            ssdomlat = ssdom.MID_LAT.values[0]
+                                            ssdomlon = ssdom.MID_LON.values[0]
+                                            ev2mp = vincenty_dist(evla,evlo,ssdomlat,ssdomlon)
+                                            ssdom_id = "Upper_{}".format(u)
                                             if ev2mp <= crit:
-                                                print('Source Side Domain (ScS) {}'.format(l))
-                                                op_SS = self.domain2operator("Upper_{}".format(l),ph)
-
-                                                # Now add Path to XML file
-                                                # print(ph)
+                                                print('Source Side Domain (ScS) {}'.format(u))
+                                                op_SS = self.domain2operator(ssdom_id,ph)
                                                 self.get_sac(ph)
                                                 # Now make XML for this Path
                                                 path = ElementTree.SubElement(pathset,'path')
@@ -345,8 +342,11 @@ class PathSetter:
                                                 evt_uid = ElementTree.SubElement(path,'event_uid')
                                                 evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
                                                 path.append(op_SS)
+                                                self.udom_c[ssdom_id] += 1
                                                 path.append(op_LM)
+                                                self.ldom_c[ldom_id] += 1
                                                 path.append(op_RS)
+                                                self.udom_c[rsdom_id] += 1
                                     else:
                                         # Now add Path to XML file
                                         # print(ph)
