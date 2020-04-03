@@ -12,7 +12,7 @@
 
 ######## Imports ##############
 from xml.etree import ElementTree # ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
-                                   # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
+                                  # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
 from xml.etree.ElementTree import Element,SubElement
 from xml.dom import minidom
 import pandas as pd
@@ -24,6 +24,7 @@ from calc_aoi import slw2aoi
 import numpy as np
 from obspy.clients import iris
 from sphe_trig import vincenty_dist
+
 ###############################
 __author__ = "Joseph Asplet"
 __license__ = "MIT"
@@ -198,14 +199,18 @@ class PathSetter:
         dml = '{{{}}}domain'.format(self.xmlns['mtsML']) # need the triple curly braces to get a get of braces surrounding the mtsML
         udoms = []
         ldoms = []
+        self.udom_c = {}
+        self.ldom_c = {}
         print(dml)
         for dom in self.model.iter(dml):
             d_id = dom[0].text
 
             if d_id.split('_')[0] == 'Upper':
                 udoms.append(int(d_id.split('_')[1]))
+                self.udom_c.update({d_id:0})
             elif d_id.split('_')[0] == 'Lower':
                 ldoms.append(int(d_id.split('_')[1]))
+                self.ldom_c.update({d_id:0})
 
         return (udoms,ldoms)
 
@@ -246,7 +251,8 @@ class PathSetter:
         ex = 0
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
-        crit = 6.0 # [deg] - the distance criterea for including phases in a domain.
+        print(self.ldom_c)
+        crit = 5 # [deg] - the distance criterea for including phases in a domain.
                    #         designed to give some overlap in neighbouring domians for reduce edge effects...
         ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
         rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
