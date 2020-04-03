@@ -10,7 +10,7 @@
 #
 ###
 import numpy as np
-from scipy import sin, cos, tan, arctan, arctan2, arccos, pi, deg2rad,rad2deg
+from scipy import sin, cos, tan, arctan, arctan2, arccos, pi, deg2rad,rad2deg,sqrt
 
 def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
     '''
@@ -52,7 +52,7 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
 
         if abs(lam_old - lam_new) < tol:
             lam = lam_new
-            
+
             break
         else:
             lam_old = lam_new # reset lam_old and repeat
@@ -71,6 +71,54 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
         return np.around(s,decimals=4)
     else:
         print("deg is not Boolean")
+
+def vincenty_direct(lat1,lon1,azi,dist,ang_dist=True):
+    '''Implementation of Vincenty's formula for the direct geodesic problem
+       We take an initial point (mlat,mlon), azimuth (azi) and distance (distdeg) and find the end point
+    '''
+    # Constants for WGS84
+    a = 6378137.0 #[m] length of semi-major axis (radius at equator)
+    f = 1/298.257223563 # flattening of the ellipsoid
+    b = (1 - f) * a  # [m] length of semi-minor axis  (radius at poles)
+# Start by calculating the latitude on the auxilliary sphere and the angular distance between the point and the equator
+    phi1 = deg2rad(lat1)
+    L1 = deg2rad(lon1)
+    alpha1 = deg2rad(azi)
+    U1 = arctan((1-f)*tan(phi1))
+    sigma1 = arctan2(tan(U1),cos(alpha1))
+    sin_alpha = cos(U1)*sin(alpha1)
+    u2 = (1 - sin_alpha**2)*((a**2 - b**2)/b**2 )
+    A = 1 + (u2/16384)**(4096 + u2*(-768 + u2*(320 - 175*u2)))
+    B = (u2/1024)*(256 + u2*(-128 + u2*(74 - 47*u2)))
+
+    # As we are providing the angluar distance [distdeg], there is no need to iterate to find sigma
+    # For completeness I have implented it anyway
+    if ang_dist is True:
+        sigma = deg2rad(dist)
+        sigm = 2*sigma1 + sigma
+    else:
+        sigma_old = 0
+        sigma = dist/(b*A)
+        while (abs(sigma - sigma_old) > 1e-5):
+            sigma_old = sigma
+            sigm = 2*sigma1 + sigma
+            ds = cos(sigma)*(-1 + 2*cos(sigm)**2)
+            ds -= (B/6) * cos(sigm) * (-3 + 4*sin(sigma)**2) * (-3 + 4*cos(sigm)**2)
+            delta_sigma = B * sin(sigma) * (cos(sigm) + 0.25 * B * ds)
+            sigma += delta_sigma
+    # Now we can solve for phi2, L2
+    sq = sqrt(sin_alpha**2 + (sin(U1)*sin(sigma) - cos(U1)*cos(sigma)*cos(alpha1))**2)
+    phi2 = arctan2(sin(U1)*cos(sigma) + cos(U1)*sin(sigma)*cos(alpha1),(1 - f)* sq)
+    lam = arctan2(sin(sigma)*sin(alpha1),cos(U1)*cos(sigma) - sin(U1)*sin(sigma)*cos(alpha1))
+    cos_sq_alpha = (1 - sin_alpha**2)
+    C = (f/16) * cos_sq_alpha*(4 + f*(4 - 3*cos_sq_alpha))
+    Lb = (sigma + C*sin(sigma)*(cos(sigm) + C*cos(sigma)*(-1 + 2*cos(sigm)**2)))
+    L = lam - (1 - C)*f*sin_alpha*Lb
+    L2 = L + L1
+    alpha2 = arctan2(sin_alpha,cos(U1)*cos(sigma)*cos(alpha1) - sin(U1)*sin(sigma))
+    lat2 = np.around(rad2deg(phi2),decimals=4)
+    lon2 = np.around(rad2deg(L2),decimals=4)
+    return lat2,lon2
 
 def dist_deg(qlat,qlon,slat,slon):
     '''
