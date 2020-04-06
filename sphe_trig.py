@@ -54,6 +54,10 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
             lam = lam_new
 
             break
+        elif i >= 50:
+            # Points are nearly antipodal. As this routine is interested in points much closer together we will fix s to 180 degrees for now
+            # Newton's method can be used to improve convergence
+            s = 180
         else:
             lam_old = lam_new # reset lam_old and repeat
     # # Once we have found lambda
