@@ -24,6 +24,7 @@ from calc_aoi import slw2aoi
 import numpy as np
 from obspy.clients import iris
 from sphe_trig import vincenty_dist
+import time as timeM
 
 ###############################
 __author__ = "Joseph Asplet"
@@ -207,10 +208,10 @@ class PathSetter:
 
             if d_id.split('_')[0] == 'Upper':
                 udoms.append(int(d_id.split('_')[1]))
-                self.udom_c.update({d_id:0})
+                self.udom_c.update({int(d_id.split('_')[1]) : 0})
             elif d_id.split('_')[0] == 'Lower':
                 ldoms.append(int(d_id.split('_')[1]))
-                self.ldom_c.update({d_id:0})
+                self.ldom_c.update({int(d_id.split('_')[1]) : 0})
 
         return (udoms,ldoms)
 
@@ -251,7 +252,7 @@ class PathSetter:
         ex = 0
         # Before Pathsetting, parse the upper/lower domains from the model file
         udoms,ldoms = self.parsedoms()
-        print(self.ldom_c)
+        # print(self.ldom_c)
         crit = 5.5 # [deg] - the distance criterea for including phases in a domain.
                    #         designed to give some overlap in neighbouring domians for reduce edge effects...
         ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
@@ -299,34 +300,38 @@ class PathSetter:
                     lmlat = row[phlat]
                     lmlon = row[phlon]
 
-                    for j in ldoms:
-                        ldom = self.doms[self.doms.BIN == j]
+                    for l in ldoms:
+                        ldom = self.doms[self.doms.BIN == l]
                         ldomlat = ldom.MID_LAT.values[0]
                         ldomlon = ldom.MID_LON.values[0]
-                        ldom_id = "Lower_{}".format(j)
+                        ldom_id = "Lower_{}".format(l)
                         # print("Low doms distaz", lmlat,lmlon,ldomlat,ldomlon)
                         pp2mp = vincenty_dist(lmlat,lmlon,ldomlat,ldomlon)
+
                         if pp2mp <= crit:
-                            op_LM = self.domain2operator("Lower_{}".format(j),ph)
+                            op_LM = self.domain2operator(ldom_id,ph)
                             for r in udoms:
                                 rsdom = self.doms[self.doms.BIN == r]
                                 rsdomlat = rsdom.MID_LAT.values[0]
                                 rsdomlon = rsdom.MID_LON.values[0]
+                                rsdom_id = "Upper_{}".format(r)
                                 # print("Rside doms distaz", stla,stlo,udomlat,udomlon)
                                 st2mp = vincenty_dist(stla,stlo,rsdomlat,rsdomlon)
                                 if st2mp <= crit:
                                     # print("RSide Domain {}".format(k))
-                                    op_RS = self.domain2operator("Upper_{}".format(k),ph)
+                                    op_RS = self.domain2operator(rsdom_id,ph)
                                     if ph == 'ScS':
                                         # Need a source side domain also for ScS
                                         for s in udoms: # Loop through udoms again to find
                                             ssdom = self.doms[self.doms.BIN == s]
+                                            # print(s)
+                                            # print(ssdom)
                                             ssdomlat = ssdom.MID_LAT.values[0]
                                             ssdomlon = ssdom.MID_LON.values[0]
                                             ev2mp = vincenty_dist(evla,evlo,ssdomlat,ssdomlon)
-                                            ssdom_id = "Upper_{}".format(u)
+                                            ssdom_id = "Upper_{}".format(s)
                                             if ev2mp <= crit:
-                                                print('Source Side Domain (ScS) {}'.format(u))
+                                                # print('Source Side Domain (ScS) {}'.format(s))
                                                 op_SS = self.domain2operator(ssdom_id,ph)
                                                 self.get_sac(ph)
                                                 # Now make XML for this Path
@@ -342,11 +347,12 @@ class PathSetter:
                                                 evt_uid = ElementTree.SubElement(path,'event_uid')
                                                 evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
                                                 path.append(op_SS)
-                                                self.udom_c[ssdom_id] += 1
+                                                self.udom_c[r] += 1
                                                 path.append(op_LM)
-                                                self.ldom_c[ldom_id] += 1
+                                                self.ldom_c[l] += 1
                                                 path.append(op_RS)
-                                                self.udom_c[rsdom_id] += 1
+                                                self.udom_c[s] += 1
+                                                print('Here (ScS), time is {}'.format(timeM.ctime()))
                                     else:
                                         # Now add Path to XML file
                                         # print(ph)
@@ -364,12 +370,16 @@ class PathSetter:
                                         evt_uid = ElementTree.SubElement(path,'event_uid')
                                         evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
                                         path.append(op_LM)
+                                        self.ldom_c += 1
                                         path.append(op_RS)
-                                        # print('FOO')
+                                        self.udom_c += 1
+                                        print('Here (SnKS), time is {}'.format(timeM.ctime()))
                 else:
                     q_fail +=1
         # End of all the looping. Now write out the Pathset XML
+
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
+        self._write_domain_counts(file='{}/E_pac.T3.domains.counts'.format(self.opath))
 
     def baz_test(self,baz):
         '''
@@ -542,3 +552,12 @@ class PathSetter:
             reparsed.writexml(writer,indent="    ",addindent="    ",newl="\n",encoding="utf-8")
 
         print('XML written to {}'.format(file))
+
+    def _write_domain_counts(self,file):
+        """
+        Adds the domains phase counts to the domains DF and then writes it out
+        """
+        self.doms['Lower_Count'] = self.doms['BIN'].map(self.ldom_c)
+        self.doms['Upper_Count'] = self.doms['BIN'].map(self.udom_c)
+        self.doms = self.doms.fillna(0)
+        self.doms.to_csv(file,sep=' ',index=False)
