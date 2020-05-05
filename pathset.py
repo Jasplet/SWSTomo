@@ -41,7 +41,6 @@ class PathSetter:
             #########
             df [obj]   -  filename for the relevent .pairs file, with T3 bins for SKS, SKKS in lower domains and in the upper mantle
                          Titled: SKS_BIN, SKKS_BIN, UPPER_BIN (Setter will select rows from the relevent station)
-            ddir [str] - The data directory. Directory where sheba has output the .mts (and SAC) files to
             domains    - A domains file (e.g. E_pac.T3.counts.doms). This file must contain the trigonal domain midpoints (having Vertices is
                          nice, as it the Upper and Lower domains counts for each bin (i.e. how many paths were assigned to each bin by geogeom)
             Optional:
@@ -51,7 +50,7 @@ class PathSetter:
             model [str]   - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
             config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
-    def __init__(self,file1,phase1,ddir,domains,file2=None,phase2=None,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
+    def __init__(self,file1,phase1,domains,file2=None,phase2=None,station=None,model=None,odir=None,config_uid='Test Run',use_setup=False):
 
         self.phases = []
         print('Reading df')
@@ -77,6 +76,8 @@ class PathSetter:
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
             self.odir = self.opath.split('/')[-1]
+        elif len(odir.split('/')) > 1:
+            self.odir = odir
         else:
             self.opath = '/Users/ja17375/SWSTomo/BluePebble/{}'.format(odir)
         # Link to data directory in /Users/ja17375/SWSTomo/BluePebble/E_pacific
@@ -87,17 +88,9 @@ class PathSetter:
         if model == None:
             print('Model will need to be generated before Pathsetting can be done')
             # self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/Model.xml'
-        elif use_setup is True:
-            print("Reading Model file from MTS_Setup")
-            self.modelxml = '/Users/ja17375/SWSTomo/MTS_Setup/{}'.format(model)
-            ## Read Model.xml (assumed to be in working directory because why wouldnt it?)
-            root = ElementTree.parse('{}'.format(self.modelxml)).getroot()
-            self.model = root.find('mtsML:model',self.xmlns)
-            model_name = self.model[0].text
-            print('Using model named ... {}'.format(model_name))
         else:
-            print("Reading Model file from {}".format(os.getcwd()))
-            self.modelxml = '{}/{}'.format(self.opath,model)
+            print("Reading Model file from SWSTomo/Models".format(os.getcwd()))
+            self.modelxml = '/Users/ja17375/SWSTomo/Models/{}'.format(model)
             ## Read Model.xml (assumed to be in working directory because why wouldnt it?)
             self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
             self.model = self.modelroot.find('mtsML:model',self.xmlns)
@@ -292,14 +285,12 @@ class PathSetter:
                     # print('File {} Not found'.format(f))
                     nf += 1
                     continue
-
                 if ph_good is True:
                     # Now we need to select the correct domains and in the right order (order of operators).
                     phlat = '{}_LM_LAT'.format(ph)
                     phlon = '{}_LM_LON'.format(ph)
                     lmlat = row[phlat]
                     lmlon = row[phlon]
-
                     for l in ldoms:
                         ldom = self.doms[self.doms.BIN == l]
                         ldomlat = ldom.MID_LAT.values[0]
@@ -318,7 +309,6 @@ class PathSetter:
                                 # print("Rside doms distaz", stla,stlo,udomlat,udomlon)
                                 st2mp = vincenty_dist(stla,stlo,rsdomlat,rsdomlon)
                                 if st2mp <= crit:
-                                    # print("RSide Domain {}".format(k))
                                     op_RS = self.domain2operator(rsdom_id,ph)
                                     if ph == 'ScS':
                                         # Need a source side domain also for ScS
@@ -331,7 +321,7 @@ class PathSetter:
                                             ev2mp = vincenty_dist(evla,evlo,ssdomlat,ssdomlon)
                                             ssdom_id = "Upper_{}".format(s)
                                             if ev2mp <= crit:
-                                                # print('Source Side Domain (ScS) {}'.format(s))
+                                                print('Source Side Domain (ScS) {}'.format(s))
                                                 op_SS = self.domain2operator(ssdom_id,ph)
                                                 self.get_sac(ph)
                                                 # Now make XML for this Path
@@ -352,11 +342,11 @@ class PathSetter:
                                                 self.ldom_c[l] += 1
                                                 path.append(op_RS)
                                                 self.udom_c[s] += 1
-                                                print('Here (ScS), time is {}'.format(timeM.ctime()))
-                                    else:
+
+                                    elif (ph == 'SKS') or (ph == 'SKKS'):
                                         # Now add Path to XML file
-                                        # print(ph)
                                         self.get_sac(ph)
+                                        print('Reciever Side Domain (SnKS) {}'.format(r))
                                         # Now make XML for this Path
                                         path = ElementTree.SubElement(pathset,'path')
                                         pathname = 'Path {} {}'.format(i,ph)
@@ -370,16 +360,19 @@ class PathSetter:
                                         evt_uid = ElementTree.SubElement(path,'event_uid')
                                         evt_uid.text = '{}_{}'.format(row.DATE,row.TIME)
                                         path.append(op_LM)
-                                        self.ldom_c += 1
+                                        self.ldom_c[l] += 1
                                         path.append(op_RS)
-                                        self.udom_c += 1
+                                        self.udom_c[s] += 1
                                         print('Here (SnKS), time is {}'.format(timeM.ctime()))
+                                    else:
+                                        print('Unknown phase')
+                                        break
                 else:
                     q_fail +=1
         # End of all the looping. Now write out the Pathset XML
 
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
-        self._write_domain_counts(file='{}/E_pac.T3.domains.counts'.format(self.opath))
+        # self._write_domain_counts(file='{}/E_pac.T3.goodphases.domains.counts'.format(self.opath))
 
     def baz_test(self,baz):
         '''
@@ -389,7 +382,7 @@ class PathSetter:
             if (baz > v-30) and (baz <= (v)):
                 return "{:03d}".format(v)
 
-    def bin2domain(self,dom_name):
+    def bin2domain(self,dom_name,corr=False,ac=None,bc=None,gc=None,sc=None):
         '''
         Takes a single bin and creates the requisit domain XML (for Model.xml)
         '''
@@ -401,11 +394,33 @@ class PathSetter:
         medium = ElementTree.SubElement(domain,'medium')
         medium.text = 'elliptical:2000.,1000.,2000.'
         domain.append(ElementTree.Comment(' Inversion Parameters '))
-        alpha = ElementTree.SubElement(domain, 'alpha', type="fixed",value="90")
-        beta = ElementTree.SubElement(domain, 'beta', type="fixed",value="0")
-        gamma = ElementTree.SubElement(domain, 'gamma', type="periodic",min="-90",max="90",init="0")
-        domain.append(ElementTree.Comment('<gamma  type="fixed" value="-30"/>'))
-        s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
+        if corr is False:
+            alpha = ElementTree.SubElement(domain, 'alpha', type="fixed",value="90")
+            beta = ElementTree.SubElement(domain, 'beta', type="fixed",value="0")
+            gamma = ElementTree.SubElement(domain, 'gamma', type="periodic",min="-90",max="90",init="0")
+            domain.append(ElementTree.Comment('<gamma  type="fixed" value="-30"/>'))
+            s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
+        elif corr is True:
+            if ac :
+                alpha = ElementTree.SubElement(domain, 'alpha', type="fixed",value=str(ac))
+            else:
+                alpha = ElementTree.SubElement(domain, 'alpha', type="fixed",value="90")
+
+            if bc :
+                beta = ElementTree.SubElement(domain, 'beta', type="fixed",value=str(bc))
+            else:
+                beta = ElementTree.SubElement(domain, 'beta', type="fixed",value="0")
+
+            if gc :
+                gamma = ElementTree.SubElement(domain, 'gamma', type="fixed", value=str(gc))
+            else:
+                gamma = ElementTree.SubElement(domain, 'gamma', type="periodic",min="-90",max="90",init="0")
+
+            if sc :
+                s = ElementTree.SubElement(domain, 'strength', type="fixed", value=str(sc))
+            else:
+                s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
+                
         return domain
 
     def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,):
@@ -426,35 +441,25 @@ class PathSetter:
         #find corresponding Upper (reciever side) Domains
         # first test outside of loop so we can append the rest into 1 Series more easily
         if Rside_Domains is None:
-            print('Finding all corresponding Upper Domains')
+            print('Finding all Reciever Side Domains')
             rside_sks = self.df_snks[self.df_snks['SKS_BIN'].isin(Low_Domains)]['RSIDE_BIN']
             rside_skks = self.df_snks[self.df_snks['SKKS_BIN'].isin(Low_Domains)]['RSIDE_BIN']
             rdf = rside_sks.append(rside_skks)
             if self.df_scs is not None:
                 rside_scs = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['RSIDE_BIN']
                 rdf = rdf.append(rside_scs)
-                # Now add Source side domains. These are also in the upper mantle
-                if Sside_Domains is None:
-                    # Only ScS will have Source-side domains so we just want to test df2
-                    sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['SSIDE_BIN']
 
-            udf = rdf.append(sside)
-            Upper_Domains = udf.drop_duplicates().values
+            rside = rdf.drop_duplicates().values
+        else:
+            rside = Rside_Domains
 
-        elif Sside_Domains is None:
+        if Sside_Domains is None:
             # Only ScS will have Source-side domains so we just want to test df2
             sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains)]['SSIDE_BIN']
             sside = sside.drop_duplicates().values.tolist()
-            print(sside)
-            Upper_Domains = sside + Rside_Domains
-
         else:
-            Upper_Domains = Sside_Domains + Rside_Domains
+            sside = Sside_Domains
 
-        print(Upper_Domains)
-        # if Sside_Domains is None:
-        #     # Only ScS will have Source-side domains so we just want to test df2
-        #     sside = self.df_scs[self.df_scs['LOWMM_BIN'].isin(Low_Domains.values)]
 
         # Write the xml
         root = ElementTree.Element('MatisseML')
@@ -465,11 +470,11 @@ class PathSetter:
         m_uid = ElementTree.SubElement(m,'model_uid')
         m_uid.text = 'Trigonal Domains'
 
-        u,l = 0,0
-        for udom in Upper_Domains:
+        s,l,r = 0,0,0
+        for sdom in sside:
             dom = self.bin2domain('Upper_{}'.format(int(udom)))
             m.append(dom)
-            u += 1
+            s += 1
 
         for ldom in Low_Domains:
             # Loop over requested lower domains
@@ -477,6 +482,10 @@ class PathSetter:
             m.append(dom)
             l+=1
 
+        for rdom in rside:
+            dom = self.bin2domain('Upper_{}'.format(int(udom)))
+            m.append(dom)
+            r += 1
 
         print('Model Generated')
         self.model = m
