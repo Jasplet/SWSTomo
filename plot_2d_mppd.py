@@ -76,9 +76,6 @@ def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
     # Highlight Likliest values
     v_l = [V[imax]-dx2,V[imax],V[imax]+dx2,V[imax]+dx2,V[imax]-dx2]
     p_l = [P[imax],P[imax],P[imax],0,0]
-
-
-
     # Now do the plotting
     if orientation is 'vertical':
         ax.fill(v_poly,p_poly,linestyle='-',color=(0.7,0.7,0.7)) # Polygon for full region
@@ -98,22 +95,17 @@ def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
         print('Orientation {} not recognised'.format(orientation))
     return ax
 
-def plot_2d_mppd(i,save=False,f_uid=None):
+def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     '''
     plot the 2-D mppd on
     i - [str]. A 3 digits code ('001') that corresponds to the MPPD that we want to plot
     '''
     # Remove line above when devel is done
-    P = np.loadtxt('MTS_2D_MPPD.{}.p'.format(i),skiprows=1) # Skip header line
-    XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(i)) # Two-row file containing X and Y parameters
+
     x = XY[0] # array of X-parameters
     y = XY[1] # array of Y-parameters
     # Get Header of .p file for domain labels
-    with open('MTS_2D_MPPD.{}.p'.format(i),'r') as reader:
-        h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
-        dps = h.split('-')
-        dp_x = dps[0] #Domain & Parameter (should be Domain:Par) in the X dir
-        dp_y = dps[1]
+
 
     (X,Y) = np.meshgrid(x,y)
 
@@ -147,7 +139,7 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     print(x.max())
     if x.max() == 0.0495: # This is the max value of unrestricted domain:
         ax_extent= (0,0.05,-90,90)
-        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower')
+        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower',interpolation='gaussian')
         ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
         ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
         ax_x.set_xlim([0,0.05])
@@ -171,6 +163,10 @@ def plot_2d_mppd(i,save=False,f_uid=None):
     if sv is True:
         plt.savefig('MPPD_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
 
+def write_out_most_likely(idx,g,s):
+    '''Finds (again) the most likely solution from the MPPD and writes it to a textfile '''
+
+
 if __name__ == "__main__":
     # If this script is being run from the command line
     # idx = sys.argv[0] # expected usage is plot_2d_mppd.py 001
@@ -192,9 +188,28 @@ if __name__ == "__main__":
     n = glob('MTS_2D_MPPD*.xy')
     idx = [f.split('.')[1] for f in n]
     idx.sort() # sort idx in ascending order (for tidyness sake)
-    for i in idx:
-        print(i)
-        plot_2d_mppd(i,sv,args.filename)
+
+    with open('MTS_most_likely.results','w') as writer:
+        writer.write('Layer Domain Gamma Strength\n')
+        for i,dom in enumerate(idx):
+            print(i,dom)
+            P = np.loadtxt('MTS_2D_MPPD.{}.p'.format(dom),skiprows=1) # Skip header line
+            # Read the headers
+            with open('MTS_2D_MPPD.{}.p'.format(dom),'r') as reader:
+                h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
+                dps = h.split('-')
+                layer = dps[0].split('_')[0]
+                domain = dps[0].split('_')[1].split(':')[0]
+            XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
+            # For each MPPD find most likely solution
+            (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
+            gamma = XY[0][icol]
+            s = XY[1][irow]
+            writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
+        # plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
     # Do stuff (plotting mainly)
+
+
+    write_out_most_likely(domain,gamma,s)
     plt.show()
 # EOF
