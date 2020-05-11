@@ -77,14 +77,14 @@ def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
     v_l = [V[imax]-dx2,V[imax],V[imax]+dx2,V[imax]+dx2,V[imax]-dx2]
     p_l = [P[imax],P[imax],P[imax],0,0]
     # Now do the plotting
-    if orientation is 'vertical':
+    if orientation == 'vertical':
         ax.fill(v_poly,p_poly,linestyle='-',color=(0.7,0.7,0.7)) # Polygon for full region
         ax.fill(v_polyt,p_polyt,linestyle='-',color=(0.7,0.7,1.0))
         ax.fill(v_l,p_l,color=(0.85,0.85,1.0))
         # Draw a line atop the shaded hist.
         ax.plot(v_line,p_line,'k')
         ax.set_ylim([0,np.around(1.2*P[imax],decimals=3)])
-    elif orientation is 'horizontal':
+    elif orientation == 'horizontal':
         ax.fill(p_poly,v_poly,linestyle='-',color=(0.7,0.7,0.7)) # Polygon for full region
         ax.fill(p_polyt,v_polyt,linestyle='-',color=(0.7,0.7,1.0))
         ax.fill(p_l,v_l,color=(0.85,0.85,1.0))
@@ -160,8 +160,11 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     plt.title('MPPD for Domain {}'.format(dp_x.split(':')[0]))
     # fig,ax = plt.subplots(1,1)
     # _plot_1d_ppd(ax,x,px_cppd,dp_x)
-    if sv is True:
+    if sv == True:
         plt.savefig('MPPD_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
+    else:
+        plt.show()
+
 
 def write_out_most_likely(idx,g,s):
     '''Finds (again) the most likely solution from the MPPD and writes it to a textfile '''
@@ -199,17 +202,22 @@ if __name__ == "__main__":
                 h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
                 dps = h.split('-')
                 layer = dps[0].split('_')[0]
-                domain = dps[0].split('_')[1].split(':')[0]
+                try:
+                    domain = dps[0].split('_')[1].split(':')[0]
+                except IndexError:
+                    domain="First"
+                    dp_x = "X"
+                    dp_y = "Y"
             XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
             # For each MPPD find most likely solution
             (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
             gamma = XY[0][icol]
             s = XY[1][irow]
             writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
-        # plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
+            plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
     # Do stuff (plotting mainly)
 
 
     write_out_most_likely(domain,gamma,s)
-    plt.show()
+    # plt.show()
 # EOF
