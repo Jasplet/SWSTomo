@@ -1,18 +1,13 @@
-#! /usr/bin/env python
-##############################
-#   Program: pathset.py
+'''
+This program is designed to gather to generate the required Pathset.xml file.
+Primarily by collecting the .mts files that are output by sheba when measuring SWS, for each phase a seperate <data> tag is required
+Stating the paths to the requisit SAC files (which are copied to the data directory in the current model path [for now at least])
 #
-##############################
-#   Author: J. Asplet
-##############################
-#   This program is designed to gather to generate the required Pathset.xml file.
-#   Primarily by collecting the .mts files that are output by sheba when measuring SWS, for each phase a seperate <data> tag is required
-#   Stating the paths to the requisit SAC files (which are copied to the data directory in the current model path [for now at least])
-#
-
+'''
 ######## Imports ##############
-from xml.etree import ElementTree # ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
-                                  # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
+from xml.etree import ElementTree 
+# ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
+# N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
 from xml.etree.ElementTree import Element,SubElement
 from xml.dom import minidom
 import pandas as pd
@@ -20,7 +15,7 @@ import os
 from pathlib import Path
 from shutil import copy
 import glob
-from calc_aoi import slw2aoi
+from calc_aoi import slw2aoi,get_rayparam
 import numpy as np
 from obspy.clients import iris
 from sphe_trig import vincenty_dist
@@ -167,8 +162,8 @@ class PathSetter:
                     raise NameError('Domain is incorreclty named. Should be either "Upper" or "Lower".')
             # else:
             #     print('Domain {} is not in Model!'.format(uid_tmp))
-
-        aoi = slw2aoi(depth,self.evdp,self.gcarc,phase) # Calculate ray param and then incidence angle
+        slw = get_rayparam(self.evdp,self.gcarc,phase)
+        aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
         # aoi = 0 # Assume rays are vertical, not true but using this for testing.
         dist = self.dom_h / np.cos(np.radians(aoi)) # Calculate distance travelled through domain
 
@@ -420,8 +415,22 @@ class PathSetter:
                 s = ElementTree.SubElement(domain, 'strength', type="fixed", value=str(sc))
             else:
                 s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
-                
+
         return domain
+
+    def calc_domain_correction(dom,type):
+        '''
+        This function calculates and prepares domain corrections for upper mantle domains.
+        For source side (ScS) domains it is assumed that
+        each ScS phase has a source side correction. Assuming a 100km thick domain we can approximate that dt = 100*strength (derived from 1 domain
+        synthetic example)
+        For reciever side domains these corrections come from Schaffer's surface wave models. Some transformations may need to be done to the model averages to
+        get them to fit into our scheme
+        '''
+        if type == 'source-side':
+            df = self.df_scs[self.df_scs.BIN == dom]
+            phi = df.S_FAST.values
+            dt = df.S_TLAG.values
 
     def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,):
         '''
@@ -472,6 +481,8 @@ class PathSetter:
 
         s,l,r = 0,0,0
         for sdom in sside:
+            # Add in something here to get the source side corrections
+            # Here I assume that each ScS phase has an associated source side correction
             dom = self.bin2domain('Upper_{}'.format(int(udom)))
             m.append(dom)
             s += 1
