@@ -5,7 +5,7 @@ Stating the paths to the requisit SAC files (which are copied to the data direct
 #
 '''
 ######## Imports ##############
-from xml.etree import ElementTree 
+from xml.etree import ElementTree
 # ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
 # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
 from xml.etree.ElementTree import Element,SubElement
@@ -292,7 +292,7 @@ class PathSetter:
                         ldomlon = ldom.MID_LON.values[0]
                         ldom_id = "Lower_{}".format(l)
                         # print("Low doms distaz", lmlat,lmlon,ldomlat,ldomlon)
-                        pp2mp = vincenty_dist(lmlat,lmlon,ldomlat,ldomlon)
+                        pp2mp,azi1 = vincenty_dist(lmlat,lmlon,ldomlat,ldomlon)
 
                         if pp2mp <= crit:
                             op_LM = self.domain2operator(ldom_id,ph)
@@ -302,7 +302,7 @@ class PathSetter:
                                 rsdomlon = rsdom.MID_LON.values[0]
                                 rsdom_id = "Upper_{}".format(r)
                                 # print("Rside doms distaz", stla,stlo,udomlat,udomlon)
-                                st2mp = vincenty_dist(stla,stlo,rsdomlat,rsdomlon)
+                                st2mp,azi2 = vincenty_dist(stla,stlo,rsdomlat,rsdomlon)
                                 if st2mp <= crit:
                                     op_RS = self.domain2operator(rsdom_id,ph)
                                     if ph == 'ScS':
@@ -313,7 +313,7 @@ class PathSetter:
                                             # print(ssdom)
                                             ssdomlat = ssdom.MID_LAT.values[0]
                                             ssdomlon = ssdom.MID_LON.values[0]
-                                            ev2mp = vincenty_dist(evla,evlo,ssdomlat,ssdomlon)
+                                            ev2mp,azi3 = vincenty_dist(evla,evlo,ssdomlat,ssdomlon)
                                             ssdom_id = "Upper_{}".format(s)
                                             if ev2mp <= crit:
                                                 print('Source Side Domain (ScS) {}'.format(s))
