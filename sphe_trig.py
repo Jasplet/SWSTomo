@@ -29,7 +29,8 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
         D (float) - distance between the two input points in degrees (or in km if deg=False)
 
     Examples:
-        >>>vincenty_dist(0,0,0,20)
+        >>>vincenty_dist(5,5,10,10)
+            7.03998, 44.64333
             
  
     '''
@@ -95,11 +96,21 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
     else:
         print("deg is not Boolean")
         
-    return [D,rad2deg(a1)]
+    return D,rad2deg(a1)
 
 def vincenty_direct(lat1,lon1,azi,dist,ang_dist=True):
     '''Implementation of Vincenty's formula for the direct geodesic problem
-       We take an initial point (mlat,mlon), azimuth (azi) and distance (distdeg) and find the end point
+    
+    Args:
+        lat1 (float) - the latitude of the starting point
+        lon2 (float) - the longitude of the starting point
+        azi (float) - azimuth from the start to the destination point
+        dist (float) - distance from start to destination. Default is in degrees
+        ang_dist (boolean) - switch to tell function if dist is in degrees (True) or km (False)
+        
+    Returns:
+        lat2 (float) - latitude of the destination point
+        lon2 (float) - longitude of the destination point 
     '''
     # Constants for WGS84
     a = 6378137.0 #[m] length of semi-major axis (radius at equator)
