@@ -1,7 +1,8 @@
 import pandas as pd
 from xml.etree import ElementTree 
 from scipy.stats import circmean
-from numpy import mean,deg2rad,rad2deg,pi
+from numpy import mean,deg2rad,rad2deg,pi,sin,cos,arctan2
+import numpy as np 
 def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None):
     '''
     Takes a single bin and creates the requisit domain XML (for Model.xml)
@@ -112,3 +113,67 @@ def check_if_sside_corr(df):
     df_w_corr = m.drop(drp,axis='columns')
     
     return df_w_corr
+
+def weighted_circmean(angles,weights,high=pi*0.5,low=-pi*0.5):
+    '''
+    A function to take a weighted arithmetic mean of a set of angles that falls within a specified range. Default is -90 to 90 degrees.
+    
+    Args:
+        angles (array): input array. angles should be in degrees (they will be converted to radians inside the function)
+    
+        weights (array): the weighting to be applied to the angles. default is to set weights to 1 (i.e take an unweighted mean)
+     
+        high (float or int): high bound of range that angles should fall in
+        
+        low (float or int): low bound of range that angles should fall in 
+        
+    Returns:
+        weighted mean 
+        
+    '''
+    angles = np.asarray(angles)
+    weights = np.asarray(weights)
+    if weights == 1:
+        weights = np.ones(angles.size)
+#   Check there are enough weights for angles 
+    if weights.size != angles.size:
+        raise ValueError('The number of elements in angles ({}) and weights ({}) do not match'.format(angles.size,weights.size))
+        
+    if weights.max() > 1:
+        # Normalise weights
+        norm_w = weights / weights.sum()
+    else:
+        norw_w = weights
+
+    s_angles = sin()
+    
+    
+def depth_weighted_circmean(mod_point,depth_max=250):
+    '''
+    This function takes a single gird (lat,lon) point in a surface wave model and returns a weighted average of the modelled fast direction across all the depth slices
+    
+    Args:
+        mod_point (obj) - numpy array containing [depth,lat,lon,phi]
+        depth_max (int) - the maximum depth to average up to. E.g. the default is to only average over the upper 250 km of the mantle. 
+
+    '''
+    n = (mod_point[:,0] <= depth_max).sum() # number of depth slices to average
+    if mod_point[n,0] != depth_max:
+        weighted_phi = np.zeros(n+1)
+        # if the last point is not the same as the specified depth max we will fix it to be so (this is a little iffy)
+        phi = mod_point[n+1,3]
+        w = (depth_max - mod_point[n,0])/depth_max # normalized weighting
+        weighted_phi[n+1] = phi*w
+    else:
+        weighted_phi = np.zeros(n)
+    
+    top = 0 
+    for ds in range(0,n):
+        phi = mod_point[ds,3]
+        w = (mod_point[ds,0] - top)/depth_max # normalized weighting
+        top = mod_point[ds,0]
+        weighted_phi[ds] = phi*w
+    
+    cm = circmean(np.deg2rad(weighted_phi))
+    
+    cm = cm*len(weighted_phi) # we use normalised weighted phi values, circmean still divides by n which we do not need/want to do 
