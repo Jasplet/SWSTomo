@@ -38,16 +38,6 @@ def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None):
 
     return domain
 
-
-def add_rside_correction(dom,type):
-    '''
-    This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
-    
-    For reciever side domains these corrections come from Schaffer's surface wave models. Some transformations may need to be done to the model averages to
-    get them to fit into our scheme
-    '''
-    
-
 def add_sside_correction(date,time,stat):
     '''
     This function adds a source side correction for ScS phases. It looks up ScS corrections from a pre-prepared corrections database
@@ -154,6 +144,7 @@ def weighted_circmean(angles,weights=[]):
         raise ValueError('The number of elements in angles ({}) and weights ({}) do not match'.format(angles.size,weights.size))
     # Translate samples to a range of 0 - 2pi
     samps = (angles - low)*2.*pi / (high - low)
+    print(rad2deg(angles))
     print(rad2deg(samps))
     s_angles = weights * sin(samps) / weights.sum()
     c_angles = weights * cos(samps) / weights.sum()
@@ -171,7 +162,7 @@ def weighted_circmean(angles,weights=[]):
     
     return res
 
-def depth_stack_mod(mod_point,depth_max=250):
+def depth_stack_point(mod_point,depth_max=250):
     '''
     This function takes a single gird (lat,lon) point in a surface wave model and returns a weighted average of the modelled fast direction across all the depth slices
     
@@ -180,14 +171,15 @@ def depth_stack_mod(mod_point,depth_max=250):
         depth_max (int) - the maximum depth to average up to. E.g. the default is to only average over the upper 250 km of the mantle. 
 
     '''
-    n = (mod_point[:,0] <= depth_max).size() # number of depth slices to average
+    n = (mod_point[:,0] <= depth_max).sum()# number of depth slices to average
     print(n)
     if mod_point[n,0] != depth_max:
         weights = np.zeros(n+1)
         phis = np.zeros(n+1)
-        stengths = np.zeros(n+1)
+        strengths = np.zeros(n+1)
         # if the last point is not the same as the specified depth max we will fix it to be so (this is a little iffy)
-        weights[n+1] = (depth_max - mod_point[n,0]) # normalized weighting
+        print(weights)
+        weights[n] = (depth_max - mod_point[n,0]) # normalized weighting
     else:
         weights = np.zeros(n)
         phis = np.zeros(n)
@@ -197,8 +189,44 @@ def depth_stack_mod(mod_point,depth_max=250):
     for ds in range(0,n):
         phis[ds] = mod_point[ds,3]
         weights[ds] = (mod_point[ds,0] - top) # normalized weighting
-        strenghs[ds] = mod_point[ds,6]
+        strengths[ds] = mod_point[ds,6]
         top = mod_point[ds,0]
     
     cm = weighted_circmean(np.deg2rad(phis),np.deg2rad(weights))
+    str_m = np.sum(weights * strengths) / np.sum(weights)
     
+    return rad2deg(cm),str_m
+
+def depth_stack_model(model_file,depth_max=250):
+    '''
+    This function takes one of the Schaffer models and creates a depth averaged version up to a set depth
+    '''
+    model = np.loadtxt('Schaeffer_Models/SL2016svA_n-k.mod')
+    dm = model[:,0],min()
+    n = (model[model[:,0]] == dm).shape[0]
+    stacked_model = np.zeros((n,4))
+    i = 0
+    for lon in model[:,1]:
+        for lat in model[:,2]:
+            mod_point = model[(model[:,1] == lon) & (model[:,2] == lat)]
+            phi, strength = depth_stack_point(mod_point,depth_max)
+            stacked_model[i,0] = lon
+            stacked_model[i,1] = lat
+            stacked_model[i,2] = phi
+            stacked_model[i,3] = strength
+    
+    return stacked_model
+
+def resample_model():
+    '''
+    This function takes the depth averaged model and interpolates it onto our T3 domain grid (triangular bin midpoints)
+    To interpolate the phi values shift the range to 0 - 180 and use the %180 
+    '''
+
+def add_rside_correction(dom,type):
+    '''
+    This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
+    
+    For reciever side domains these corrections come from Schaffer's surface wave models. Some transformations may need to be done to the model averages to
+    get them to fit into our scheme
+    '''
