@@ -4,6 +4,7 @@ This module contains functions needed to create reciever side corrections for ou
 
 from numpy import mean,deg2rad,rad2deg,pi,sin,cos,arctan2
 import numpy as np 
+from scipy import interpolate
 
 def weighted_circmean(angles,weights=[]):
     '''
@@ -71,6 +72,9 @@ def depth_stack_point(mod_point,depth_max=330):
         mod_point (obj) - numpy array containing [depth,lat,lon,phi]
         depth_max (int) - the maximum depth to average up to. E.g. the default is to only average over the upper 400 km of the mantle. 
 
+    Returns
+        phi_mean (float) - mean phi value for the given mod point [raidans]
+        str_mean (float) - mean strength value for the mod point 
     '''
     n = (mod_point[:,0] <= depth_max).sum() - 1 # have to subtract 1 as indexing start at 0
     if mod_point[n,0] != depth_max:
@@ -92,10 +96,10 @@ def depth_stack_point(mod_point,depth_max=330):
         strengths[ds] = mod_point[ds,6]
         top = mod_point[ds,0]
 
-    cm = weighted_circmean(np.deg2rad(phis),np.deg2rad(weights))
-    str_m = np.sum(weights * strengths) / np.sum(weights)
+    phi_mean = weighted_circmean(np.deg2rad(phis),np.deg2rad(weights))
+    str_mean = np.sum(weights * strengths) / np.sum(weights)
     
-    return rad2deg(cm),str_m
+    return phi_mean ,str_mean
 
 def depth_stack_model(model_file,depth_max=330):
     '''
@@ -104,6 +108,9 @@ def depth_stack_model(model_file,depth_max=330):
     Args:
         model_file (str) - the models to stack
         depth_max (int) - maximum depth to stack up to (default 400km)
+        
+    Returns:
+        stacked_model (ndarray) - numpy array containing the depth stacked model.
     '''
     model = np.loadtxt(model_file)
     dm = model[:,0].min() # get one depth so we can find the size of the lat,lon grid
@@ -122,6 +129,55 @@ def depth_stack_model(model_file,depth_max=330):
     
     return stacked_model
 
+def circ_interp2d(x,y,xnew,ynew,phi,low=-pi/2,high=pi/2):
+    '''
+    Function to interpolate circular quantities. This is done by interpolating the sin and cos of the unrwapped phi (to 0 - 2pi) and then using atan2 to find the interpolated angle
+    
+    Args:
+        x (array-like) - X-values of original grid
+        y (array-like) - Y-values of original grid
+        xnew (array-like) - X-values to interpolate for
+        ynew (array-like) - Y-values to interpolate for
+        phi (array-like) - angles to interpolate. Must be in radians 
+        low (float) - lower bound of range of angles (defaults to -pi/2)
+        high (float) -upper bound of range of angles (default to pi/2)
+        
+    Returns:
+        phinew (array-like) 
+    '''
+
+    phi2int = (phi - low)*2.*pi / (high - low) 
+    sinphi = sin(phi2int)
+    cosphi = cos(phi2int)
+    
+    fsin = interpolate.interp2d(x, y, sinphi, kind = 'cubic')
+    fcos = interpolate.interp2d(x, y, cosphi, kind = 'cubic')
+    
+    sinint = fsin(xnew, ynew)
+    cosint = fcos(xnew, ynew)
+    phiint = arctan2(sinint, cosint)
+    
+    phinew = phiint * (high - low)/2/pi + low 
+    
+    return phinew
+    
+def resample_model(stacked_model,T3_grid):
+    '''
+    This function takes the depth averaged model and interpolates it onto our T3 domain grid (triangular bin midpoints)
+    To interpolate the phi values shift the range to 0 - 180 and use the %180 
+    
+    Args:
+        stacked_model (nd-array) - numpy array containing a depth stacked model
+        T3_grid (str) - path to the T3_grid file
+    
+    Returns:
+        resampled_model (nd_array) - numpy array containing the surface wave model interpolated
+                                     onto the T3 grid
+    '''
+    
+    T3 = np.loadtxt(T3_grid,skiprows=1)
+    
+    
 def plot_stacked_model(stacked_model):
     '''
     
