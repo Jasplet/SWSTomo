@@ -106,12 +106,6 @@ def check_if_sside_corr(df):
     return df_w_corr
 
 
-def resample_model():
-    '''
-    This function takes the depth averaged model and interpolates it onto our T3 domain grid (triangular bin midpoints)
-    To interpolate the phi values shift the range to 0 - 180 and use the %180 
-    '''
-
 def add_rside_correction(dom,type):
     '''
     This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
