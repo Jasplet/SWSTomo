@@ -5,6 +5,11 @@ This module contains functions needed to create reciever side corrections for ou
 from numpy import mean,deg2rad,rad2deg,pi,sin,cos,arctan2
 import numpy as np 
 from scipy import interpolate
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import matplotlib.pyplot as plt
+from sphe_trig import vincenty_dist, vincenty_direct
+import pandas as pd 
 
 def weighted_circmean(angles,weights=[]):
     '''
@@ -55,11 +60,8 @@ def weighted_circmean(angles,weights=[]):
     # transform result back to a range of -pi/2 - pi/2
     res = tmp*(high - low)/2/pi + low
     if res < -(pi/2):
-        print(rad2deg(res))
         res = pi/2 - abs(pi/2 - abs(res))
-        print(rad2deg(res))
     elif res > (pi/2):
-        print(rad2deg(res))
         res = -pi/2 + abs(res - pi/2)
     
     return res
@@ -92,11 +94,11 @@ def depth_stack_point(mod_point,depth_max=330):
 
     for ds in range(0,n):
         phis[ds] = mod_point[ds,3]
-        weights[ds] = (mod_point[ds,0] - top) # normalized weighting
+        weights[ds] = (mod_point[ds,0] - top) # weighting is the thickness of each model layer
         strengths[ds] = mod_point[ds,6]
         top = mod_point[ds,0]
 
-    phi_mean = weighted_circmean(np.deg2rad(phis),np.deg2rad(weights))
+    phi_mean = weighted_circmean(np.deg2rad(phis),weights)
     str_mean = np.sum(weights * strengths) / np.sum(weights)
     
     return phi_mean ,str_mean
@@ -124,7 +126,7 @@ def depth_stack_model(model_file,depth_max=330):
         phi, strength = depth_stack_point(mod_point,depth_max)
         stacked_model[i,0] = lon
         stacked_model[i,1] = lat
-        stacked_model[i,2] = phi
+        stacked_model[i,2] = phi # phi is still in radians here 
         stacked_model[i,3] = strength
     
     return stacked_model
@@ -150,9 +152,13 @@ def circ_interp2d(x,y,xnew,ynew,phi,low=-pi/2,high=pi/2):
     sinphi = sin(phi2int)
     cosphi = cos(phi2int)
     
-    fsin = interpolate.interp2d(x, y, sinphi, kind = 'cubic')
-    fcos = interpolate.interp2d(x, y, cosphi, kind = 'cubic')
-    
+#     fsin = interpolate.interp2d(x, y, sinphi, kind = 'cubic')
+#     fcos = interpolate.interp2d(x, y, cosphi, kind = 'cubic')
+    print(x.size,y.size,sinphi.size,cosphi.size)
+    fsin = interpolate.griddata(x, y, sinphi)
+    fcos = interpolate.griddata
+    +(x, y, cosphi)
+    print(xnew.size, ynew.size)
     sinint = fsin(xnew, ynew)
     cosint = fcos(xnew, ynew)
     phiint = arctan2(sinint, cosint)
@@ -161,7 +167,7 @@ def circ_interp2d(x,y,xnew,ynew,phi,low=-pi/2,high=pi/2):
     
     return phinew
     
-def resample_model(stacked_model,T3_grid):
+def resample_model(stacked_model,T3_grid='T3_global.bins'):
     '''
     This function takes the depth averaged model and interpolates it onto our T3 domain grid (triangular bin midpoints)
     To interpolate the phi values shift the range to 0 - 180 and use the %180 
@@ -176,11 +182,151 @@ def resample_model(stacked_model,T3_grid):
     '''
     
     T3 = np.loadtxt(T3_grid,skiprows=1)
+    stk_x = stacked_model[:,0] - 180 
+    stk_y = stacked_model[:,1]
+    stk_phi = stacked_model[:,2]
+    T3_x = T3[:,1]
+    T3_y = T3[:,2]
+    
+    phi_int = circ_interp2d(stk_x,stk_y,T3_x,T3_y,stk_phi)
+    
+    return phi_int
+    
+def plot_model(model,title):
+    '''
+    This function plots a surface wave model, with the orientation of the anisotropy at each mesh point. THis can be used to plot a single depth slice of a model or a depth averaged model
+    
+    Args:
+        model (array-like) - 2d numpy array containing the model. Must be formatted with columns of 
+                             lon, lat, phi, strength
+        title (str) - title to give the plot              
+    Returns:
+        map view of the model
+    '''
+    if model[1,0] - model[0,0] == 1.0 :
+        print('First column is Bin No. adjusting')
+        lon = model[:,2]
+        lat = model[:,1]
+        phi = model[:,3]
+        strength = model[:,4]
+    else:    
+        lon = model[:,0]
+        lat = model[:,1]
+        phi = model[:,2]
+        strength = model[:,3]
+    if (phi.max() <= pi/2) & (phi.min() >= -pi/2):
+        print('Phi is in raidans, convert to degrees')
+        phi = rad2deg(phi)
     
     
-def plot_stacked_model(stacked_model):
+    extent=[-140,-70,0,50]
+
+    fig = plt.figure(figsize=(11,11))
+    ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
+    ax.set_extent(extent)
+    ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='high'))
+    ax.quiver(lon,lat,strength,strength,angles=90-phi,
+              headaxislength=0,transform=ccrs.PlateCarree(),
+              pivot='mid',units='xy',scale=0.5)
+#     ax.quiver(ds.lon,ds.lat,ds.dVs_P,ds.dVs_P,angles=270-ds.phi,headaxislength=0,transform=ccrs.PlateCarree())   
+    ax.plot(lon,lat,'r.',transform=ccrs.PlateCarree())
+    ax.set_title(title)
+    grd = ax.gridlines(draw_labels=True)
+    grd.top_labels = None
+    
+    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked',dpi=400)
+    
+    plt.show()
+    
+def comp_grids(grd_in):
+    '''
+    This is a function to comare the grid of the input surface wavel model and the grid spacing of the T3 grid
+    '''
+    lon = grd_in[:,0]
+    lat = grd_in[:,1]
+    T3 = np.loadtxt('T3_global.bins',skiprows=1)
+    T3_lon = T3[:,2]
+    T3_lat = T3[:,1]
+    
+    extent=[-140,-70,0,50]
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
+    ax.set_extent(extent)
+    ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='low'))
+    ax.plot(lon,lat,'b.',transform=ccrs.PlateCarree())
+    ax.plot(T3_lon,T3_lat,'rx',transform=ccrs.PlateCarree())
+    
+    plt.show()
+    
+def find_points(points,qlat,qlon,tdist):
+    '''
+    This function finds all points within a fixed distance of the query point, assuming a WGS84 ellipsoid. Returning the points and their distance from the query point 
+    
+    Args:
+        points (array-like) - array containing (at least) the lat,lon of the points to search
+        qlat (float or int) - latitude of the query point
+        qlon (float or int) - longitude of the query point 
+        dist (float or int) - the search distance
+        
+    Returns:
+        targets (array - like) - target points, with the distance between each point and the query point appended
+    '''
+
+    points = np.asarray(points) # Make sure points is an array, should be lon, lat, phi, str
+    if (points[:,1].max() > 90) | (points[:,1].min() < -90):
+        raise ValueError("Points array is not right. 2nd column should be latitude!")
+    elif (points[:,0].max() > 180) | (points[:,0].min() < -180):
+        raise ValueError("Longitude (points[:,0]) incorrect. Range must be -180 to 180 degrees")
+        
+
+    print('Query lat {}, query lon {}'.format(qlat,qlon))
+    dists = [] # empty list to hold distances 
+    tpts = [] # list of indicies 
+    for p, point in enumerate(points):
+        plon = point[0]
+        plat = point[1]
+        dist, azi = vincenty_dist(qlat, qlon, plat, plon)
+        if dist <= tdist:
+            dists.append(dist)
+            tpts.append(p)
+    
+    if len(tpts) == 0:
+        raise ValueError('No points found, this should not happen. Check input params')
+        
+    dists = np.array(dists)
+    targets = points[tpts]
+
+    
+    return targets, dists
+    
+def spatial_average_model(stacked_model,T3_grid='T3_global.bins'):
+    '''
+    This function take the depth averaged surface wave model and takes a weighted spatial average at each of the T3 mesh points
     '''
     
-    '''
-    fig = plt.figure()
+    T3 = np.loadtxt(T3_grid,skiprows=1)
+    T3_swav_corr = np.zeros([T3.shape[0],6])
+    T3_swav_corr[:,0:3] = T3[:,0:3] # Populate BIN, MidLat and MidLon
+    if (stacked_model[:,0].min() == 0) & (stacked_model[:,0].max() == 360):
+        # Need to map lon from 0 - 360 to -180 -180
+        stacked_model[:,0] = stacked_model[:,0] - 180 
     
+    for i, query_point in enumerate(T3):
+        qlat = query_point[1]
+        qlon = query_point[2]
+        
+        pts, weights = find_points(stacked_model, qlat, qlon, tdist=4.)
+        npts = pts.shape[0]
+        phi = pts[:,2]
+        strengths = pts[:,3]
+        phi_avg = weighted_circmean(phi, weights)
+        str_avg = np.sum(weights * strengths) / np.sum(weights)
+        
+        T3_swav_corr[i,3] = rad2deg(phi_avg)
+        T3_swav_corr[i,4] = str_avg
+        T3_swav_corr[i,5] = npts
+        
+    T3_corr = pd.DataFrame(T3_swav_corr,
+                           columns=['BIN','MID_LAT','MID_LON','PHI','STRENGTH','NPTS'])
+    
+    return T3_corr
