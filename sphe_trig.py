@@ -73,7 +73,7 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
             # Newton's method can be used to improve convergence
             print('Points antipodal')
             s = 180
-            break
+            return s,None
         else:
             lam_old = lam_new # reset lam_old and repeat
     # # Once we have found lambda
