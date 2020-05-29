@@ -73,6 +73,7 @@ def depth_stack_point(mod_point,depth_max=330):
     Args:
         mod_point (obj) - numpy array containing [depth,lat,lon,phi]
         depth_max (int) - the maximum depth to average up to. E.g. the default is to only average over the upper 400 km of the mantle. 
+        weighting (string) - type of weighting to use ['depths','strengths','both']
 
     Returns
         phi_mean (float) - mean phi value for the given mod point [raidans]
@@ -84,17 +85,31 @@ def depth_stack_point(mod_point,depth_max=330):
         phis = np.zeros(n+1)
         strengths = np.zeros(n+1)
         # if the last point is not the same as the specified depth max we will fix it to be so (this is a little iffy)
-        weights[n] = (depth_max - mod_point[(n+1),0]) # normalized weighting
+        if weighting == 'depths':
+            weights[n] = (depth_max - mod_point[(n + 1),0]) # normalized weighting
+        elif weighting == 'strengths':
+            weights[n] = mod_point[(n + 1), 6 ]
+        elif weighting == 'both':
+            weights[n] = mod_point[(n + 1), 6 ] * (depth_max - mod_point[(n + 1),0])
+        else:
+            raise ValueError('weighting is not depths, strengths or both')
     else:
         weights = np.zeros(n)
         phis = np.zeros(n)
         strengths = np.zeros(n)
     
     top = 0 
-
     for ds in range(0,n):
         phis[ds] = mod_point[ds,3]
-        weights[ds] = (mod_point[ds,0] - top) # weighting is the thickness of each model layer
+        if weighting == 'depths':
+            weights[ds] = (mod_point[ds ,0] - top)
+        elif weighting == 'strengths'
+            weights[ds] = mod_point[ds ,6]
+        elif weighting == 'both':
+            weights[ds] = (mod_point[ds, 0] - top) * mod_point[ds,6]
+        else:
+            raise ValueError('weighting is not depths, strengths or both')
+        
         strengths[ds] = mod_point[ds,6]
         top = mod_point[ds,0]
 
@@ -218,12 +233,12 @@ def plot_model(model,title):
         print('Phi is in raidans, convert to degrees')
         phi = rad2deg(phi)
     
-    
-    extent=[-140,-70,0,50]
+
 
     fig = plt.figure(figsize=(11,11))
     ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
-    ax.set_extent(extent)
+    extent=[-140,-70,0,50]
+    ax.set_extent(extent)      
     ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='high'))
     ax.quiver(lon,lat,strength,strength,angles=90-phi,
               headaxislength=0,transform=ccrs.PlateCarree(),
@@ -234,7 +249,7 @@ def plot_model(model,title):
     grd = ax.gridlines(draw_labels=True)
     grd.top_labels = None
     
-    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked',dpi=400)
+    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked_str_weighted',dpi=400)
     
     plt.show()
     
