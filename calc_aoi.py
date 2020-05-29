@@ -14,23 +14,43 @@ from scipy.interpolate import pchip_interpolate
 
 def get_rayparam(evdp,dist,ph):
     '''
-    Use obspy TauP to get the ray parameter for each phase to then get the aoi
-    ph [str] - the phase code (SKS or SKKS)
-    evdp - the source depth [km]
-    dist - the distancefrom source to reciever (for the whole path) [deg]
+    This function uses TauP (from obspy) to get the ray parameter for each phase to then get the aoi
+    
+    Args:
+        evdp (float) - the event depth [km]
+        dist (float) - the distance from source to reciever (for the whole path) [deg]
+        ph (str) - the phase code (SKS or SKKS)
+
+    Returns:
+        rp (float) - the ray parameter for the given event
+        
+    Examples:
+        >>> get_rayparam(10,100,'SKS')
+            281.70596459588847
     '''
     model = TauPyModel('ak135')
     arrival = model.get_travel_times(source_depth_in_km=evdp, distance_in_degree=dist, phase_list=[ph])
     rp = arrival[0].ray_param # Rap paramter in s/rad
     return rp
 
-def slw2aoi(depth,evdp,gcarc,phase,wave='s'):
+def slw2aoi(depth,slw,wave='s'):
     '''
-    Ported (and simplified) version of slw2aoi.m function.
-    Phase [str] - should either by 's' or 'p'
+    This function calculates the angle of incidence of a seismic ray with a given ray      
+    parameter (slw)
+    
+    Args:
+        depth (float) - the depth of the ray of interest [km]
+        slw (float) - the ray parameter to convert to angle of incidence
+        wave (str) - [optional] where the seismic phase is a 'p' or 's' wave. Default is 's'.
+
+    Returns:
+        aoi (float) - the angle of incidence of the seismic ray of interest [deg]
+
+    Examples:
+        >>> slw2aoi(100,281.7,'s')
+        11.650320444422107
     '''
     V=ak135_original()
-    slw = get_rayparam(evdp,gcarc,phase)
     RE = 6371.0 # [km] earth radii
     if wave == 'p':
         vel = V[:,1] # p-wave velocity
