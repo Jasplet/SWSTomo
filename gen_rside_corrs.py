@@ -10,6 +10,7 @@ import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
 from sphe_trig import vincenty_dist, vincenty_direct
 import pandas as pd 
+import argparse
 
 def weighted_circmean(angles,weights=[]):
     '''
@@ -66,7 +67,7 @@ def weighted_circmean(angles,weights=[]):
     
     return res
 
-def depth_stack_point(mod_point,depth_max=330):
+def depth_stack_point(mod_point,weighting,depth_max=330):
     '''
     This function takes a single gird (lat,lon) point in a surface wave model and returns a weighted average of the modelled fast direction across all the depth slices
     
@@ -103,12 +104,12 @@ def depth_stack_point(mod_point,depth_max=330):
         phis[ds] = mod_point[ds,3]
         if weighting == 'depths':
             weights[ds] = (mod_point[ds ,0] - top)
-        elif weighting == 'strengths'
+        elif weighting == 'strengths':
             weights[ds] = mod_point[ds ,6]
         elif weighting == 'both':
             weights[ds] = (mod_point[ds, 0] - top) * mod_point[ds,6]
         else:
-            raise ValueError('weighting is not depths, strengths or both')
+            raise ValueError(f'weighting "{weighting}" is not depths, strengths or both')
         
         strengths[ds] = mod_point[ds,6]
         top = mod_point[ds,0]
@@ -118,18 +119,18 @@ def depth_stack_point(mod_point,depth_max=330):
     
     return phi_mean ,str_mean
 
-def depth_stack_model(model_file,depth_max=330):
+def depth_stack_model(model,weighting='both',depth_max=330):
     '''
     This function takes one of the Schaffer models and creates a depth averaged version up to a set depth
     
     Args:
-        model_file (str) - the models to stack
+        model (array-like) - the models to stack
+        weighting (string) - type of weighting to use ['depths','strengths','both']
         depth_max (int) - maximum depth to stack up to (default 400km)
         
     Returns:
         stacked_model (ndarray) - numpy array containing the depth stacked model.
     '''
-    model = np.loadtxt(model_file)
     dm = model[:,0].min() # get one depth so we can find the size of the lat,lon grid
     ds = model[model[:,0] == dm] # get one depth slice 
     n = ds.shape[0] # length of ds array corresponds to number of points in lat,lon grid
@@ -138,7 +139,7 @@ def depth_stack_model(model_file,depth_max=330):
     for i,row in enumerate(ds): # loop over one depth slice as its the easiest way to find all grid nodes
         lon,lat = row[1],row[2] 
         mod_point = model[(model[:,1] == lon) & (model[:,2] == lat)]
-        phi, strength = depth_stack_point(mod_point,depth_max)
+        phi, strength = depth_stack_point(mod_point, weighting,depth_max)
         stacked_model[i,0] = lon
         stacked_model[i,1] = lat
         stacked_model[i,2] = phi # phi is still in radians here 
@@ -291,8 +292,10 @@ def find_points(points,qlat,qlon,tdist):
     if (points[:,1].max() > 90) | (points[:,1].min() < -90):
         raise ValueError("Points array is not right. 2nd column should be latitude!")
     elif (points[:,0].max() > 180) | (points[:,0].min() < -180):
-        raise ValueError("Longitude (points[:,0]) incorrect. Range must be -180 to 180 degrees")
-        
+#         raise ValueError("Longitude (points[:,0]) incorrect. Range must be -180 to 180 degrees"  
+        tocorr = points[points[:,0] > 180] 
+        tocorr[:,0] = tocorr[:,0] - 360
+        points[points[:,0] > 180] = tocorr
 
     print('Query lat {}, query lon {}'.format(qlat,qlon))
     dists = [] # empty list to hold distances 
@@ -314,7 +317,7 @@ def find_points(points,qlat,qlon,tdist):
     
     return targets, dists
     
-def spatial_average_model(stacked_model,T3_grid='T3_global.bins'):
+def spatial_average_model(stacked_model,T3_grid='/Users/ja17375/SWSTomo/T3_global.bins'):
     '''
     This function take the depth averaged surface wave model and takes a weighted spatial average at each of the T3 mesh points
     '''
@@ -345,3 +348,39 @@ def spatial_average_model(stacked_model,T3_grid='T3_global.bins'):
                            columns=['BIN','MID_LAT','MID_LON','PHI','STRENGTH','NPTS'])
     
     return T3_corr
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mod_id",action="store",type=str,help="Filename for model to create Rside corrections from")
+#     parser.add_argument("-o","--outfile",action="store",type=str,
+#                         default="SL2016svA_resampled_to_T3", 
+#                         help="File name for the reciever side correction")
+    parser.add_argument("-w","--weightingstyle",action="store",type=str,default="both",
+                        choices=['strengths','depths','both', 'all'],
+                        help="Style of weighting to use in the depth stakcing. Options are 'depths', 'strengths','both', or 'all'. Default is 'both'")
+    parser.add_argument("-d","--depth",action='store',type=int,default=330.,
+                        help='Maximum depth (km) to stack the input model to. ')
+
+    args = parser.parse_args()
+    mod_id = args.mod_id
+    depth = args.depth
+    print(mod_id, depth, args.weightingstyle)
+    if args.weightingstyle == 'all':
+        weighting = ['strengths','depths','both']
+    elif args.weightingstyle == 'strengths':
+        weighting = ['strengths']
+    elif args.weightingstyle == 'depths':
+        weighting = ['depths']
+    elif args.weightingstyle == 'both':
+        weigthing = ['both']
+    else:
+        raise ValueError('Weighting style not recognised')
+        
+    model = np.loadtxt(mod_id)
+    for w in weighting:
+        print('Weighting by {}'.format(w))
+        dep_stacked_model = depth_stack_model(model,weighting=w,depth_max=depth)
+        T3_model = spatial_average_model(dep_stacked_model)
+        T3_model.to_csv('SL2016svAs_T3mesh_w_by_{}'.format(w))
+        
+    print('Done')
