@@ -123,35 +123,42 @@ class PathSetter:
             operator (obj) - An ElementTree Strucutre conainting the operator XML
         '''
         domains = self.model.findall('mtsML:domain',self.xmlns)
-
+        uid = None
         for dom in domains:
+            # Loop through domains in the model file 
 #             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
             uid_tmp = dom[0].text
-            if uid_tmp == domain:
-                print('Domain {} Found'.format(uid_tmp))
+            if domain == uid_tmp:
                 uid = uid_tmp
-                if uid.split('_')[0] == 'Lower':
-                    # Domains starting with Lower are at CMB. So depth == 2890 km
-                    depth = 2890. # Approx depth of CMB [km] 
+                break
+        
+        if uid:
+            print('Domain {} Found'.format(uid_tmp))
+        else:
+            return None
                 
-                    slw = get_rayparam(evdp,gcarc,phase)
-                    aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
-                    dom_h = 250
-                elif uid.split('_')[0] == 'Upper':
-                    depth = 250. # Depth of upper domain (keeping domain the same thickness for now)
-                   
-                    slw = get_rayparam(evdp,gcarc,phase)
-                    aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
-                    dom_h = 250
-                elif uid.split('_')[0] == 'SSide':
-                    # If domain ID is SSide then we know this domain is for a source side correction. 
-                    azi = 0 # For the splitting corrections we fix azi to 0
-                    aoi = 0
-                    dom_h = 100
-                    print('SSide')
-                else:
-                    raise ValueError(f'Domain \"{uid_tmp}\" not found ')
-                
+        if uid.split('_')[0] == 'Lower':
+            # Domains starting with Lower are at CMB. So depth == 2890 km
+            depth = 2890. # Approx depth of CMB [km] 
+
+            slw = get_rayparam(evdp,gcarc,phase)
+            aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
+            dom_h = 250
+        elif (uid.split('_')[0] == 'Upper') or (uid.split('_')[0] == 'RSide'):
+            depth = 250. # Depth of upper domain (keeping domain the same thickness for now)
+
+            slw = get_rayparam(evdp,gcarc,phase)
+            aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
+            dom_h = 250
+        elif uid.split('_')[0] == 'SSide':
+            # If domain ID is SSide then we know this domain is for a source side correction. 
+            azi = 0 # For the splitting corrections we fix azi to 0
+            aoi = 0
+            dom_h = 100
+#                     print('SSide')
+        else:
+            raise ValueError(f'Domain "{uid}"name does not match expected values')
+        
         dist = dom_h / np.cos(np.deg2rad(aoi))
         operator = ElementTree.Element('operator')
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
@@ -163,6 +170,8 @@ class PathSetter:
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
         l.text = str(np.around(dist,decimals=3))
+       
+
 
         return operator
 
@@ -177,11 +186,11 @@ class PathSetter:
         self.udom_c = {}
         self.ldom_c = {}
         self.sdom_c = {}
-        print(dml)
+#         print(dml)
         for dom in self.model.iter(dml):
             d_id = dom[0].text
-
-            if d_id.split('_')[0] == 'Upper':
+#             print(d_id)
+            if d_id.split('_')[0] == 'RSide':
                 u.append(d_id)
                 self.udom_c.update({d_id : 0})
             elif d_id.split('_')[0] == 'Lower':
@@ -269,11 +278,11 @@ class PathSetter:
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
         ScS_t = self.df_scs[rows2comp + ScSrows]
         SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
-        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
+        self.pdf = pd.concat([ScS_t,SnKS_t],sort=False)
+        self.pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
                             'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
                             'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
-        for i, row in pdf.iterrows():
+        for i, row in self.pdf.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
                             'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,'stat':row.STAT,
@@ -300,24 +309,30 @@ class PathSetter:
                     llon = row['{}_LM_LON'.format(ph)]
                     lowmm_ops = self.loop_thru_domains(ldoms,llat,llon,"Lower",ph,crit,
                                                        attribs['evdp'],attribs['gcarc'],attribs['azi'])
-                    rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"Upper",
+                    rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"RSide",
                                                        ph,crit,attribs['evdp'],attribs['gcarc'],attribs['azi'])
-                    sside_ops = [0] # This is so the Pathsetter will iterate at least once (so for SnKS phases it will still append the right domains)
                     if ph == 'ScS': # Only ScS needs source side domains
+                        sside_ops = ['op']
                         if len(sdoms) > 0:
 #                            We have source side correction domians for each ScS phase. 
 #                            Now we need to find the right correction for the current phase in the loop.
 #                            As we have precalculated the corrections, a domain should exist for each ScS phase. 
 #                            These corrections domains are identified by Station Code and event Date/Time
                                 dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],attribs['date'],attribs['time'])
-                                
+                                print(dom_id)
                                 sside_ops[0] = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
                                                      attribs['azi'])
+                                if sside_ops[0] is None:
+                                    print('We dont need this ScS, its a waste of space')
+                                    continue # move loop on as this ScS phase does not pass through the model domains
                         else:
 #                           Overwrite sside_ops with a list of operators from loop_thru_domains
                             sside_ops = self.loop_thru_domains(udoms,attribs['evla'],attribs['evlo'], "Upper",
                                                                ph,crit,attribs['evdp'],
-                                                               attribs['gcarc'],attribs['azi'])                   
+                                                               attribs['gcarc'],attribs['azi'])    
+                    else:
+                        sside_ops = [0]
+# This is so the Pathsetter will iterate at least once (so for SnKS phases it will still append the right domains)
                     for s,s_op in enumerate(sside_ops):
                         for m,l_op in enumerate(lowmm_ops):
                             for k,r_op in enumerate(rside_ops):
@@ -325,6 +340,7 @@ class PathSetter:
                                 # Now make XML for this Path
                                 path = ElementTree.SubElement(pathset,'path')
                                 pathname = 'Path {} {}'.format(p,ph)
+                            
                                 p +=1 
                                 path_uid = ElementTree.SubElement(path,'path_uid')
                                 path_uid.text = pathname
@@ -336,8 +352,10 @@ class PathSetter:
                                 evt_uid = ElementTree.SubElement(path,'event_uid')
                                 evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
                                 if ph == 'ScS':
+                                    print('Add SSide Operator to path')
+                                    print(ph, s)
                                     path.append(s_op)
-
+                                print('Rside Op')
                                 path.append(l_op) 
                                 path.append(r_op)
 
@@ -358,7 +376,7 @@ class PathSetter:
 
 
 
-    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None):
+    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,Rside_corr=True):
         '''
         Generate a default Model XML file, containing all requested Lower Domains (default is all in .domains file)
         and all corresponding Upper domains.
@@ -403,22 +421,31 @@ class PathSetter:
         else:
             sside = None
             for i,row in self.df_scs.iterrows():
-                date, time, stat = row.DATE, row.TIME, row.STAT
-                sdom = add_sside_correction(date, time, stat)
-                m.append(sdom)
-                s += 1
-                
-        if sside:
+                if row.LOWMM_BIN in Low_Domains:
+                    print(row.LOWMM_BIN)
+                    date, time, stat = row.DATE, row.TIME, row.STAT
+                    sdom = add_sside_correction(date, time, stat)
+                    m.append(sdom)
+                    s += 1
+        if Rside_corr == True:
+            for rdom in rside:
+                rcorr = add_rside_correction(rdom)
+                m.append(rcorr)
+                r += 1
+        elif sside:
             ud = np.concatenate((rside,sside))
             udoms = np.unique(ud)
+            udoms.sort()
+            for udom in udoms:
+                dom = bin2domain('Upper_{}'.format(int(udom)))
+                m.append(dom)
+                r += 1
         else:
-            udoms = rside
-        
-        for udom in udoms:
-            dom = bin2domain('Upper_{}'.format(int(udom)))
-            m.append(dom)
-            r += 1
-            
+            for udom in rside:
+                dom = bin2domain('RSide_{}'.format(int(udom)))
+                m.append(dom)
+                r += 1
+
         for ldom in Low_Domains:
             # Loop over requested lower domains
             dom = bin2domain('Lower_{}'.format(int(ldom)))
