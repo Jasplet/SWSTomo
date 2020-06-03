@@ -106,10 +106,17 @@ def check_if_sside_corr(df):
     return df_w_corr
 
 
-def add_rside_correction(dom,type):
+def add_rside_correction(dom,cfile='/Users/ja17375/SWSTomo/SchafferSurfaceWaveModels/SL2016svAs_T3mesh_w_by_both.mod'):
     '''
     This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
     
     For reciever side domains these corrections come from Schaffer's surface wave models. Some transformations may need to be done to the model averages to
     get them to fit into our scheme
     '''
+    corrections = np.loadtxt(cfile,skiprows=1)
+    corr = corrections[corrections[:,0] == dom][0]
+    phi = corr[3]
+    uid = 'RSide_{}'.format(int(dom))
+    corr_dom = bin2domain(uid,gc=phi)
+    
+    return corr_dom 
