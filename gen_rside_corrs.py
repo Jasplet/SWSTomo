@@ -250,9 +250,9 @@ def plot_model(model,title):
     grd = ax.gridlines(draw_labels=True)
     grd.top_labels = None
     
-    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked_str_weighted',dpi=400)
+    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked_depth_weighted',dpi=400)
     
-    plt.show()
+#     plt.show()
     
 def comp_grids(grd_in):
     '''
@@ -381,6 +381,6 @@ if __name__ == '__main__':
         print('Weighting by {}'.format(w))
         dep_stacked_model = depth_stack_model(model,weighting=w,depth_max=depth)
         T3_model = spatial_average_model(dep_stacked_model)
-        T3_model.to_csv('SL2016svAs_T3mesh_w_by_{}'.format(w))
+        T3_model.to_csv('SL2016svAs_T3mesh_w_by_{}.mod'.format(w),sep=' ',index=False)
         
     print('Done')
