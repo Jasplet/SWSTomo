@@ -83,7 +83,7 @@ class PathSetter:
         self.stations = stations.drop_duplicates()
         print('Phases specified are: ', self.phases)
         print('Read Trigonal Domians file')
-        self.doms = pd.read_csv(domains,delim_whitespace=True)
+        self.doms = pd.read_csv(domains,delim_whitespace=True).sort_values(by='BIN')
         print('Set Outdir')
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
@@ -278,11 +278,11 @@ class PathSetter:
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
         ScS_t = self.df_scs[rows2comp + ScSrows]
         SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        self.pdf = pd.concat([ScS_t,SnKS_t],sort=False)
-        self.pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
+        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
+        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
                             'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
                             'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
-        for i, row in self.pdf.iterrows():
+        for i, row in pdf.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
                             'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,'stat':row.STAT,
@@ -323,7 +323,7 @@ class PathSetter:
                                 sside_ops[0] = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
                                                      attribs['azi'])
                                 if sside_ops[0] is None:
-                                    print('We dont need this ScS, its a waste of space')
+#                                     print('We dont need this ScS, its a waste of space')
                                     continue # move loop on as this ScS phase does not pass through the model domains
                         else:
 #                           Overwrite sside_ops with a list of operators from loop_thru_domains
@@ -457,6 +457,85 @@ class PathSetter:
         print('{} Upper (Sside) domains, {} Lower domains, {} Upper (Rside) domains'.format(s,l,r))
         self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,mod_name))
 
+    def count_paths_in_model(self,Low_Domains=None,Rside_Domains=None):
+        '''
+        This function takes a test set of D'' and Reciever Side UM domains (default is all available domains) and counts the number of ScS, SKS and SKKS phases that are within the criteria distance from each of them. This is so that we can get an idea of how many paths are sampling each domain before we generate all the XML. This function repeats some things done in gen_Pathset and gen_Model, but here we do not have to worry about any XML. All we want to output is an array of domains and the number of paths for each phase that pass through the domain
+        '''
+
+        crit = 5.0 # [deg] the criteria distance 
+        if Low_Domains is None:
+            ldoms = self.doms
+        else:
+            lds = np.asarray(Low_Domains)
+            ldoms = self.doms[self.doms['BIN'].isin(lds)]
+            print(f'Using domains \n {lds}')
+
+        if Rside_Domains is None:
+            rdoms = self.doms
+        else:
+            rds = np.asarray(Rside_Domains)
+            rdoms = self.doms[self.doms['BIN'].isin(rds)]
+            print(f'Using domains \n {rds}')
+     
+        
+        rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
+        ScSrows = ['Q','SNR','BNCLAT','BNCLON']
+        SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
+        ScS_t = self.df_scs[rows2comp + ScSrows]
+        SnKS_t = self.df_snks[rows2comp + SnKSrows]
+        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
+        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
+                            'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
+                            'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)        
+        counts = np.zeros([1280,7])
+        countsM = np.zeros([1280,1280])
+        # initialise counts array for all 1280 domains. Cols [bin, ScS_Low, SKS_Low, SKKS_Low, ScS_R, SKS_R, SKKS_R]
+        for i,ldom in ldoms.iterrows():
+            llat, llon = ldom.MID_LAT, ldom.MID_LON
+            ldom_id = int(ldom.BIN)
+            for j,rdom in rdoms.iterrows():
+                rlat, rlon = rdom.MID_LAT, rdom.MID_LON
+                rdom_id = int(rdom.BIN)
+                nph = len(pdf)
+                print(f'Testing operator pair {ldom_id}, {rdom_id} for all {nph} phases')
+                for i, row in pdf.iterrows():
+                    dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, llat, llon)[0]
+                    dist_sks = vincenty_dist(row.SKS_LM_LAT, row.SKS_LM_LON, llat, llon)[0]
+                    dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, llat, llon)[0]
+                    dist_rside = vincenty_dist(row.STLA, row.STLO, rlat, rlon)[0]
+                    # as we use stla,stlo fo rrside domains ScS,SKS anf SKKS sample the same domain 
+                    if (dist_scs <= crit) and (dist_rside <= crit):
+                        # Does the current phase have a path in ldom, rdom?
+#                         print('ScS path')
+                        counts[ldom_id-1,0] = ldom_id
+                        counts[rdom_id-1,0] = rdom_id
+                        counts[ldom_id-1,1] += 1
+                        counts[rdom_id-1,4] += 1
+                        countsM[ldom_id-1,rdom_id-1] += 1
+                    
+                    if (dist_sks <= crit) and (dist_rside <= crit):
+                        counts[ldom_id-1,0] = ldom_id
+                        counts[rdom_id-1,0] = rdom_id
+#                         print('SKS path')
+                        counts[ldom_id-1,2] += 1
+                        counts[rdom_id-1,5] += 1
+                        countsM[ldom_id-1,rdom_id-1] += 1
+                    
+                    if (dist_skks <= crit) and (dist_rside <= crit):
+                        counts[ldom_id-1,0] = ldom_id
+                        counts[rdom_id-1,0] = rdom_id
+#                         print('SKKS path')
+                        counts[ldom_id-1,3] += 1
+                        counts[rdom_id-1,6] += 1
+                        countsM[ldom_id-1,rdom_id-1] += 1
+                        
+        mask = np.all(np.equal(counts, 0), axis=1)                
+        c_out = counts[~mask]
+        print('Done')
+        return c_out, countsM
+                        
+                        
+    
     def gen_MTS_Info(self):
         '''
         Function to create the simple XML file "MTS_Info"
