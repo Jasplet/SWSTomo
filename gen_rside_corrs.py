@@ -207,53 +207,7 @@ def resample_model(stacked_model,T3_grid='T3_global.bins'):
     phi_int = circ_interp2d(stk_x,stk_y,T3_x,T3_y,stk_phi)
     
     return phi_int
-    
-def plot_model(model,title):
-    '''
-    This function plots a surface wave model, with the orientation of the anisotropy at each mesh point. THis can be used to plot a single depth slice of a model or a depth averaged model
-    
-    Args:
-        model (array-like) - 2d numpy array containing the model. Must be formatted with columns of 
-                             lon, lat, phi, strength
-        title (str) - title to give the plot              
-    Returns:
-        map view of the model
-    '''
-    if model[1,0] - model[0,0] == 1.0 :
-        print('First column is Bin No. adjusting')
-        lon = model[:,2]
-        lat = model[:,1]
-        phi = model[:,3]
-        strength = model[:,4]
-    else:    
-        lon = model[:,0]
-        lat = model[:,1]
-        phi = model[:,2]
-        strength = model[:,3]
-    if (phi.max() <= pi/2) & (phi.min() >= -pi/2):
-        print('Phi is in raidans, convert to degrees')
-        phi = rad2deg(phi)
-    
-
-
-    fig = plt.figure(figsize=(11,11))
-    ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
-    extent=[-140,-70,0,50]
-    ax.set_extent(extent)      
-    ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='high'))
-    ax.quiver(lon,lat,strength,strength,angles=90-phi,
-              headaxislength=0,transform=ccrs.PlateCarree(),
-              pivot='mid',units='xy',scale=0.5)
-#     ax.quiver(ds.lon,ds.lat,ds.dVs_P,ds.dVs_P,angles=270-ds.phi,headaxislength=0,transform=ccrs.PlateCarree())   
-    ax.plot(lon,lat,'r.',transform=ccrs.PlateCarree())
-    ax.set_title(title)
-    grd = ax.gridlines(draw_labels=True)
-    grd.top_labels = None
-    
-    plt.savefig('../SchafferSurfaceWaveModels/SL2016svA_n-k_depth_stacked_depth_weighted',dpi=400)
-    
-#     plt.show()
-    
+        
 def comp_grids(grd_in):
     '''
     This is a function to comare the grid of the input surface wavel model and the grid spacing of the T3 grid
