@@ -464,20 +464,18 @@ class PathSetter:
 
         crit = 5.0 # [deg] the criteria distance 
         if Low_Domains is None:
-            ldoms = self.doms
+            ldoms = self.doms.BIN.values
         else:
-            lds = np.asarray(Low_Domains)
-            ldoms = self.doms[self.doms['BIN'].isin(lds)]
-            print(f'Using domains \n {lds}')
+            ldoms = np.asarray(Low_Domains)
 
         if Rside_Domains is None:
-            rdoms = self.doms
+            rdoms = self.doms.BIN.values
         else:
-            rds = np.asarray(Rside_Domains)
-            rdoms = self.doms[self.doms['BIN'].isin(rds)]
-            print(f'Using domains \n {rds}')
+            rdoms = np.asarray(Rside_Domains)
      
-        
+        doms = self.doms[self.doms.BIN.isin(ldoms) | self.doms.BIN.isin(rdoms)]
+        print('Counting paths in domains {}'.format(doms.BIN.values))
+
         rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
         ScSrows = ['Q','SNR','BNCLAT','BNCLON']
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
@@ -488,51 +486,49 @@ class PathSetter:
                             'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
                             'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)        
         counts = np.zeros([1280,7])
-        countsM = np.zeros([1280,1280])
+#         countsM = np.zeros([1280,1280])
         # initialise counts array for all 1280 domains. Cols [bin, ScS_Low, SKS_Low, SKKS_Low, ScS_R, SKS_R, SKKS_R]
-        for i,ldom in ldoms.iterrows():
-            llat, llon = ldom.MID_LAT, ldom.MID_LON
-            ldom_id = int(ldom.BIN)
-            for j,rdom in rdoms.iterrows():
-                rlat, rlon = rdom.MID_LAT, rdom.MID_LON
-                rdom_id = int(rdom.BIN)
-                nph = len(pdf)
-                print(f'Testing operator pair {ldom_id}, {rdom_id} for all {nph} phases')
-                for i, row in pdf.iterrows():
-                    dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, llat, llon)[0]
-                    dist_sks = vincenty_dist(row.SKS_LM_LAT, row.SKS_LM_LON, llat, llon)[0]
-                    dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, llat, llon)[0]
-                    dist_rside = vincenty_dist(row.STLA, row.STLO, rlat, rlon)[0]
-                    # as we use stla,stlo fo rrside domains ScS,SKS anf SKKS sample the same domain 
-                    if (dist_scs <= crit) and (dist_rside <= crit):
-                        # Does the current phase have a path in ldom, rdom?
-#                         print('ScS path')
-                        counts[ldom_id-1,0] = ldom_id
-                        counts[rdom_id-1,0] = rdom_id
-                        counts[ldom_id-1,1] += 1
-                        counts[rdom_id-1,4] += 1
-                        countsM[ldom_id-1,rdom_id-1] += 1
+        for i, row in pdf.iterrows():
+            print(i)
+            for i,dom in doms.iterrows():
+                dlat, dlon = dom.MID_LAT, dom.MID_LON
+                dom_id = int(dom.BIN)
+                dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, dlat, dlon)[0]
+                dist_sks = vincenty_dist(row.SKS_LM_LAT, row.SKS_LM_LON, dlat, dlon)[0]
+                dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, dlat, dlon)[0]
+                dist_rside = vincenty_dist(row.STLA, row.STLO, dlat, dlon)[0]
+                if (dist_scs <= crit):      
+                    counts[dom_id-1,0] = dom_id
+                    counts[dom_id-1,1] += 1
                     
-                    if (dist_sks <= crit) and (dist_rside <= crit):
-                        counts[ldom_id-1,0] = ldom_id
-                        counts[rdom_id-1,0] = rdom_id
-#                         print('SKS path')
-                        counts[ldom_id-1,2] += 1
-                        counts[rdom_id-1,5] += 1
-                        countsM[ldom_id-1,rdom_id-1] += 1
+                if (dist_sks <= crit):
+                    counts[dom_id-1,0] = dom_id
+                    counts[dom_id-1,2] += 1
                     
-                    if (dist_skks <= crit) and (dist_rside <= crit):
-                        counts[ldom_id-1,0] = ldom_id
-                        counts[rdom_id-1,0] = rdom_id
-#                         print('SKKS path')
-                        counts[ldom_id-1,3] += 1
-                        counts[rdom_id-1,6] += 1
-                        countsM[ldom_id-1,rdom_id-1] += 1
+                if (dist_skks <= crit):
+                    counts[dom_id-1,0] = dom_id
+                    counts[dom_id-1,3] += 1
                         
+                if (dist_rside <= crit):
+                    counts[dom_id-1,0] = dom_id
+                    if np.isnan(row.SKS_LM_LAT):
+                        #If SKS Lat values are NaN then row is for ScS
+                        counts[dom_id-1,4] += 1
+                    
+                    if np.isnan(row.ScS_LM_LAT):
+                        #If ScS Lat values are NaN then row is SnKS (which sit in the same rside domain)
+                        counts[dom_id-1,5] += 1
+                        counts[dom_id-1,6] += 1
+#         countsM = np.zeros([1280,1280])
+#         for i in range(0,1280):
+#             # rows are for ldoms
+#             for j in range(0,1280):
+#             # cols are for rdoms
+                
         mask = np.all(np.equal(counts, 0), axis=1)                
-        c_out = counts[~mask]
+#         c_out = counts[~mask]
         print('Done')
-        return c_out, countsM
+        return counts
                         
                         
     
