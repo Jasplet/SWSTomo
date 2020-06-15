@@ -15,7 +15,6 @@ import os
 import glob
 import numpy as np
 from obspy.clients import iris
-
 from sphe_trig import vincenty_dist
 from calc_aoi import slw2aoi,get_rayparam
 from sactools import get_sac,get_mts
@@ -30,19 +29,6 @@ __status__ = "Development"
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
     to parse/generate the XML needed for the PathSet file
-    Inputs:
-            Required:
-            #########
-            df [obj]   -  filename for the relevent .pairs file, with T3 bins for SKS, SKKS in lower domains and in the upper mantle
-                         Titled: SKS_BIN, SKKS_BIN, UPPER_BIN (Setter will select rows from the relevent station)
-            domains    - A domains file (e.g. E_pac.T3.counts.doms). This file must contain the trigonal domain midpoints (having Vertices is
-                         nice, as it the Upper and Lower domains counts for each bin (i.e. how many paths were assigned to each bin by geogeom)
-            Optional:
-            station [str] - the station code for the station[s] we want to include data for (starting with a single station).
-                            Now that we are looking at all stations in the East_Pacific we can read them in from a textfile
-            odir [str]    - The output directory. Path to where we want our output. If none, we use the current working directory
-            model [str]   - Name of the model file (assumed to be within MTS_Setup) that is to be used. If none is provided Model.xml is used
-            config_uid [str] - An optional unique identifier that will be added to the MTSConfig file
     """
     def __init__(self,file1,phase1,domains,file2=None,phase2=None,model=None,odir=None,config_uid='Test Run'):
         '''
@@ -170,26 +156,31 @@ class PathSetter:
         inclination.text = str(90 - aoi) # change from aoi to inclination
         l = ElementTree.SubElement(operator,'dist')
         l.text = str(np.around(dist,decimals=3))
-       
-
-
         return operator
 
     def parsedoms(self):
         '''
-
+        Function to parse the input model XML into lists of domains for use in other functions
+        
+        Args:
+            None - model XML is read in __init__ and is an attribute of the Setter Class (self)
+        Returns:
+            rdoms (list) - a list of all upper mantle reciever side domains in the model
+            ldoms (list) - a list of all D`` domains in the model
+            sdoms (list) - a list of all upper mantle source side domains in the model
+        Examples:
+            >>>(rdoms, ldoms, sdoms) = Set.parsedoms()
         '''
-        dml = '{{{}}}domain'.format(self.xmlns['mtsML']) # need the triple curly braces to get a set of braces surrounding the mtsML
+        dml = '{{{}}}domain'.format(self.xmlns['mtsML']) 
+        # need the triple curly braces to get a set of braces surrounding the mtsML
         u = []
         l = []
         sdoms = []
         self.udom_c = {}
         self.ldom_c = {}
         self.sdom_c = {}
-#         print(dml)
         for dom in self.model.iter(dml):
             d_id = dom[0].text
-#             print(d_id)
             if d_id.split('_')[0] == 'RSide':
                 u.append(d_id)
                 self.udom_c.update({d_id : 0})
@@ -203,22 +194,31 @@ class PathSetter:
                 self.sdom_c.update({d_id : 0 })
                 
         ldoms = self.doms[self.doms['BIN'].isin([i.split('_')[1] for i in l ])]
-        udoms = self.doms[self.doms['BIN'].isin([i.split('_')[1] for i in u ])]        
-        return (udoms,ldoms,sdoms)
+        rdoms = self.doms[self.doms['BIN'].isin([i.split('_')[1] for i in u ])]        
+        return (rdoms,ldoms,sdoms)
 
     def is_phase_good(self,row,ph):
-        '''Function to test if a phase is not split or null based on its Q '''
+        '''
+        Function to test if a phase is not split or null based on its Q value (Wuestefeld et al., 2010)
+        
+        Args:
+            row (df) - a row from a pandas DataFrame containing data for multiple phases
+            ph (str) - the phase to do the Q test for
+        
+        Returns:
+            res (bool) - The result of the Q test. True if phase passed, False if it fails.
+        '''
         Q = 'Q_{}'.format(ph)
         if (row[Q] < 0.5) and (row[Q] > -0.7):
             # print('Phase {} fails Q tests, continuing to next'.format(ph))
-            sn = False
+            res = False
         else:
-            sn = True
-        return sn
+            res = True
+        return res
 
     def loop_thru_domains(self,doms,raylat,raylon,uid,ph,crit,evdp,gcarc,azi):
         ''' 
-        This function loops through a set of input domains and identifies domains whose midpoints are within a set distance from a raypath (the point the raypath is at at a given depth in the mantle)
+        This function loops through a set of input domains and identifies domains whose midpoints are within a set distance from a raypath (the point the raypath is at at a given depth in the mantle). For these domains it then creates the required operator XML sequence
         
         Args:
             doms (list) - list of domains to loop over
@@ -230,6 +230,9 @@ class PathSetter:
             evdp (str) - source event depth for phase
             gcarc (float) - event-station distance [deg]
             azi (float) - event station azimuth
+            
+        Returns:
+            operators (list) - a list containing operator objects from domain2operator for the domains that were within the test distance from the raypath. 
 '''
         operators = [ ]
         for d,row in doms.iterrows():
@@ -245,8 +248,14 @@ class PathSetter:
                                                 
     def gen_PathSet_XML(self,phases=['ScS','SKS','SKKS'],fname=None):
         '''
-        Function to iterate over the DataFrame and construct the XML we need
-        Phases [list] - list of phase codes to iterate over (assuming each row in the DataFame corresponds to all phases)
+        Function to iterate over the shear-wave phase data provided to Setter and to generate the correct XML to from the Pathset XML file required for Matisse. This includes adding source/ reciever side corrections where required (and where the neccesary corrections have been provided as needed by functions called by gen_PathSet_XML)
+        
+        Args:
+            phases [list] - list of phase codes to iterate over. Default is ['ScS','SKS','SKKS']
+            fname [str] - File name to write the Pathset XML to. If no name is provided then this defaults to 'Pathset'
+            
+        Returns:
+            Output XML is written to a textfile
         '''
         # Some quick i/o management
         if fname == None:
@@ -363,23 +372,20 @@ class PathSetter:
                     q_fail +=1
         #Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
-        # self._write_domain_counts(file='{}/E_pac.T3.goodphases.domains.counts'.format(self.opath))
-
-    def baz_test(self,baz):
-        '''
-        Function to test which 30 deg backzimuth bin each phase sits in
-        '''
-        for i,v in enumerate([30,60,90,120,150,180,210,240,270,300,330,360]):
-            if (baz > v-30) and (baz <= (v)):
-                return "{:03d}".format(v)
-
-
-
 
     def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,Rside_corr=True):
         '''
-        Generate a default Model XML file, containing all requested Lower Domains (default is all in .domains file)
-        and all corresponding Upper domains.
+        Generates the model XML file required by matisse, based off the input domains. Can configure reciever side domains with corrections for phi based off surface wave models (Schaffer et al.). It is assumed that the domains used are T3 trigonal domains defined from the geogeom routine (written by J.Wookey). Domains should be assigned an identifying number, which in theory should work for other domain set-ups but this has not bee tested (as of 15/6/20)
+        
+        Args:
+            mod_name (str) - name of the model. The model XML will be written to a file mod_name.xml
+            Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none, all domains that have some phases in the input data to Setter are used (IF you have used geogeom to bin the data already)
+            Rside_Domains (array-like) - [optional] array of all reciever-side domains to use in model. If none, reciever side for all phases (from the input data to the Setter class) assigned to a D`` domain will be added
+            Sside_Domains (array-like) - [optiona] array of all source-side domains to use in the model. These domaisn are only needed for ScS phases. If none, it is assumed that there are sourceside corrections to be added for any ScS phases. These take the form of one domain per phase, with the source side correction fixed in gamma and strength. 
+            Rside_corr (bool) - [default = True]. Switch for whether receiver side corrections should be added or not. Reciever side corrections should be pre-calculated with one correction per domain. Our preferred source for these corrections is the surface-wave anisotropy model of Schaffaer et al., 2016 SL2016svA models.
+            
+        Returns:
+            model XML written to the file mod_name.xml
         '''
         if mod_name is None:
             mod_name = input('No model name provided. Enter one now :')
@@ -460,6 +466,13 @@ class PathSetter:
     def count_paths_in_model(self,Low_Domains=None,Rside_Domains=None):
         '''
         This function takes a test set of D'' and Reciever Side UM domains (default is all available domains) and counts the number of ScS, SKS and SKKS phases that are within the criteria distance from each of them. This is so that we can get an idea of how many paths are sampling each domain before we generate all the XML. This function repeats some things done in gen_Pathset and gen_Model, but here we do not have to worry about any XML. All we want to output is an array of domains and the number of paths for each phase that pass through the domain
+        
+        Args:
+            Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none, all domains that have some phases in the input data to Setter are used (IF you have used geogeom to bin the data already)
+            Rside_Domains (array-like) - [optional] array of all reciever-side domains to use in model. If none, reciever side for all phases (from the input data to the Setter class) assigned to a D`` domain will be added.
+            
+        Returns:
+            counts (array-like) - a 2d numpy array (shape(1280,7)) that contains the counts for the number of phases that pass through each D`` and reciever side domain requested. 
         '''
 
         crit = 5.0 # [deg] the criteria distance 
@@ -548,13 +561,10 @@ class PathSetter:
 
     def gen_MTS_Config(self,options=None):
         '''
-        Function to create the MTS config file
-        Inputs ===============
-            Model   - The name of the Model file
-            Option  - A dictionary of the operational options that one can pass to MTS.
-                      If no dict is provided that the defaults will be set. calc_2d_mppad has to be provided as it depends on domain names
-        ======================
-        Pathset XML file name is taken from self.pathset_xml and is set by gen_PathSet_XML
+        Function to create the MTS config file. N.B this function will just generate a default config file. It is easier to edit/copy an existing file as only a few changes are needed to tweak a run.
+        
+        Args:
+            options (dict) - options to be set in the Config file. N.B all options must be specified
 
         '''
         model = self.modelxml.split('/')[0]

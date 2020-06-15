@@ -274,6 +274,13 @@ def find_points(points,qlat,qlon,tdist):
 def spatial_average_model(stacked_model,T3_grid='/Users/ja17375/SWSTomo/T3_global.bins'):
     '''
     This function take the depth averaged surface wave model and takes a weighted spatial average at each of the T3 mesh points
+    
+    Args:
+        stacked_model (array-like) - a nd-array containing the depth avaraged model
+        T3_grid (str) - path to file containing the T3 grid domains. 
+        
+    Returns:
+        T3_corr (df) - a pandas DataFrame containing the model spatially averaged /resampled onto the T3_grid. 
     '''
     
     T3 = np.loadtxt(T3_grid,skiprows=1)

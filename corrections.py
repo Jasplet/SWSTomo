@@ -112,6 +112,13 @@ def add_rside_correction(dom,cfile='/Users/ja17375/SWSTomo/SchafferSurfaceWaveMo
     
     For reciever side domains these corrections come from Schaffer's surface wave models. Some transformations may need to be done to the model averages to
     get them to fit into our scheme
+    
+    Args:
+        dom (float, str or int) - unique indentifying number for the domain. Converted to int when used in uid
+        cfile (str) - path to file containing the reciever side corrections to add
+        
+    Returns:
+        corr_dom (domain) - Etree object containing the XML for the corrected domain. 
     '''
     corrections = np.loadtxt(cfile,skiprows=1)
     corr = corrections[corrections[:,0] == dom][0]
