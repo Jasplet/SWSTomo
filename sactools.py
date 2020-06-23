@@ -46,7 +46,7 @@ def get_sac(fileID,stat,phase):
            >>> Set.get_sac('SKS')
     '''
     for comp in ['E','N','Z']:
-        f = Path('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(fileID,comp))
+        f = Path('/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp))
         if f.is_file():
             # print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(fileID,comp))
             pass
@@ -58,5 +58,5 @@ def get_sac(fileID,stat,phase):
                 path = '/Users/ja17375/SWSTomo/SnKS_data'
 
             file = '{}/{}/{}/{}.BH{}'.format(path,stat,phase,fileID,comp)
-            dst = '/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{}'.format(fileID,comp)
+            dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)
             p = copy(file, dst)
