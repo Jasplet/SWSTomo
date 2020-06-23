@@ -201,20 +201,28 @@ if __name__ == "__main__":
             with open('MTS_2D_MPPD.{}.p'.format(dom),'r') as reader:
                 h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
                 dps = h.split('-')
-                layer = dps[0].split('_')[0]
+                layer = dps[0].split('_')[0]  
+                print(layer)      
                 try:
                     domain = dps[0].split('_')[1].split(':')[0]
+                    dp_x = dps[0]
+                    dp_y = dps[1]
                 except IndexError:
                     domain="First"
                     dp_x = "X"
                     dp_y = "Y"
-            XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
-            # For each MPPD find most likely solution
-            (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
-            gamma = XY[0][icol]
-            s = XY[1][irow]
-            writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
-            plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
+
+                XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
+                # For each MPPD find most likely solution
+                (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
+                gamma = XY[0][icol]
+                s = XY[1][irow]
+                writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
+                # if layer == ' RSide':
+                #     print('Skip plotting for Rside corr domains')
+                #     continue
+                # else:
+                plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
     # Do stuff (plotting mainly)
 
 
