@@ -66,7 +66,7 @@ class PathSetter:
         else:
             self.df_scs = None
         print(self.phases)
-        self.stations = stations.drop_duplicates()
+#         self.stations = stations.drop_duplicates()
         print('Phases specified are: ', self.phases)
         print('Read Trigonal Domians file')
         self.doms = pd.read_csv(domains,delim_whitespace=True).sort_values(by='BIN')
@@ -279,18 +279,27 @@ class PathSetter:
         ex = 0
         # Before Pathsetting, parse the upper/lower domains from the model file
         rdoms,ldoms,sdoms = self.parsedoms()
-        crit = 5.5 # [deg] - the distance criterea for including phases in a domain.
+        crit = 4.0 # [deg] - the distance criterea for including phases in a domain.
                    #         designed to give some overlap in neighbouring domians for reduce edge effects...
         ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
         rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
-        ScSrows = ['Q','SNR','BNCLAT','BNCLON']
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
-        ScS_t = self.df_scs[rows2comp + ScSrows]
         SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
-        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
-                            'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
-                            'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
+        
+        if self.df_scs:
+            ScSrows = ['Q','SNR','BNCLAT','BNCLON']
+            ScS_t = self.df_scs[rows2comp + ScSrows]
+            pdf = pd.concat([ScS_t,SnKS_t],sort=False)
+            pdf.rename(columns=
+                       {'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
+                                'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
+                                'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True) 
+        else:
+            print('SnKS Only')
+            pdf = SnKS_t
+            pdf.rename(columns=
+                       {'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
+                        'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
         for i, row in pdf.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
@@ -312,6 +321,7 @@ class PathSetter:
                     # Strip out .mts and split by '/', select end to get filestem
                 except IndexError:
                     nf += 1
+                    print('No file')
                     continue
                 if ph_good is True:                  
                     llat = row['{}_LM_LAT'.format(ph)]
@@ -320,6 +330,7 @@ class PathSetter:
                                                        attribs['evdp'],attribs['gcarc'],attribs['azi'])
                     rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"RSide",
                                                        ph,crit,attribs['evdp'],attribs['gcarc'],attribs['azi'])
+
                     if ph == 'ScS': # Only ScS needs source side domains
                         sside_ops = ['op']
                         if len(sdoms) > 0:
@@ -342,6 +353,7 @@ class PathSetter:
                     else:
                         sside_ops = [0]
 # This is so the Pathsetter will iterate at least once (so for SnKS phases it will still append the right domains)
+                    
                     for s,s_op in enumerate(sside_ops):
                         for m,l_op in enumerate(lowmm_ops):
                             for k,r_op in enumerate(rside_ops):
@@ -406,7 +418,9 @@ class PathSetter:
             lowb = self.df_snks.SKS_BIN.append(self.df_snks.SKKS_BIN)
             if self.df_scs is not None:
                 lowb2 = lowb.append(self.df_scs.LOWMM_BIN)
-            Low_Domains = lowb2.drop_duplicates().values
+                Low_Domains = lowb2.drop_duplicates().values
+            else:
+                Low_Domains= lowb.drop_duplicates().values
 
         if Rside_Domains is None:
             print('Finding all Reciever Side Domains')
@@ -426,13 +440,14 @@ class PathSetter:
             sside = Sside_Domains
         else:
             sside = None
-            for i,row in self.df_scs.iterrows():
-                if row.LOWMM_BIN in Low_Domains:
-                    print(row.LOWMM_BIN)
-                    date, time, stat = row.DATE, row.TIME, row.STAT
-                    sdom = add_sside_correction(date, time, stat)
-                    m.append(sdom)
-                    s += 1
+            if self.df_scs:
+                for i,row in self.df_scs.iterrows():
+                    if row.LOWMM_BIN in Low_Domains:
+                        print(row.LOWMM_BIN)
+                        date, time, stat = row.DATE, row.TIME, row.STAT
+                        sdom = add_sside_correction(date, time, stat)
+                        m.append(sdom)
+                        s += 1
         if Rside_corr == True:
             for rdom in rside:
                 rcorr = add_rside_correction(rdom)
@@ -490,14 +505,23 @@ class PathSetter:
         print('Counting paths in domains {}'.format(doms.BIN.values))
 
         rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
-        ScSrows = ['Q','SNR','BNCLAT','BNCLON']
         SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
-        ScS_t = self.df_scs[rows2comp + ScSrows]
         SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        pdf = pd.concat([ScS_t,SnKS_t],sort=False)
-        pdf.rename(columns={'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
-                            'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
-                            'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)        
+        if self.df_scs:
+            ScSrows = ['Q','SNR','BNCLAT','BNCLON']
+            ScS_t = self.df_scs[rows2comp + ScSrows]
+            pdf = pd.concat([ScS_t,SnKS_t],sort=False)
+            pdf.rename(columns=
+                       {'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
+                                'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
+                                'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True) 
+        else:
+            print('SnKS Only')
+            pdf = SnKS_t
+            pdf.rename(columns=
+                       {'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
+                        'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
+        
         counts = np.zeros([1280,7])
 #         countsM = np.zeros([1280,1280])
         # initialise counts array for all 1280 domains. Cols [bin, ScS_Low, SKS_Low, SKKS_Low, ScS_R, SKS_R, SKKS_R]
@@ -506,7 +530,10 @@ class PathSetter:
             for i,dom in doms.iterrows():
                 dlat, dlon = dom.MID_LAT, dom.MID_LON
                 dom_id = int(dom.BIN)
-                dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, dlat, dlon)[0]
+                if self.df_scs:
+                    dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, dlat, dlon)[0]
+                else:
+                    dist_scs = crit + 1
                 dist_sks = vincenty_dist(row.SKS_LM_LAT, row.SKS_LM_LON, dlat, dlon)[0]
                 dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, dlat, dlon)[0]
                 dist_rside = vincenty_dist(row.STLA, row.STLO, dlat, dlon)[0]
@@ -524,12 +551,16 @@ class PathSetter:
                         
                 if (dist_rside <= crit):
                     counts[dom_id-1,0] = dom_id
-                    if np.isnan(row.SKS_LM_LAT):
-                        #If SKS Lat values are NaN then row is for ScS
-                        counts[dom_id-1,4] += 1
-                    
-                    if np.isnan(row.ScS_LM_LAT):
-                        #If ScS Lat values are NaN then row is SnKS (which sit in the same rside domain)
+                    if self.df_scs:
+                        # is there any scs data ?
+                        if np.isnan(row.SKS_LM_LAT):
+                            #If SKS Lat values are NaN then row is for ScS
+                            counts[dom_id-1,4] += 1                    
+                        if np.isnan(row.ScS_LM_LAT):
+                         #If ScS Lat values are NaN then row is SnKS (which sit in the same rside domain)
+                            counts[dom_id-1,5] += 1
+                            counts[dom_id-1,6] += 1
+                    else:
                         counts[dom_id-1,5] += 1
                         counts[dom_id-1,6] += 1
 #         countsM = np.zeros([1280,1280])
@@ -539,9 +570,9 @@ class PathSetter:
 #             # cols are for rdoms
                 
         mask = np.all(np.equal(counts, 0), axis=1)                
-#         c_out = counts[~mask]
+        c_out = counts[~mask]
         print('Done')
-        return counts
+        return c_out
                         
                         
     
