@@ -1,6 +1,7 @@
 from pathlib import Path
 from xml.etree import ElementTree 
 from shutil import copy
+from obspy.signal.rotate import rotate2zne
 
 def get_mts(fileID,stat,phase):
     '''Function to get the .mts file for a phase and read in the xml.
@@ -60,3 +61,35 @@ def get_sac(fileID,stat,phase):
             file = '{}/{}/{}/{}.BH{}'.format(path,stat,phase,fileID,comp)
             dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)
             p = copy(file, dst)
+            
+def rotate_traces(st):
+    '''
+    Function to rotate an obspy stream (assuming a SAC file read in) to ZNE using rotate2zne
+    '''
+    bh1 = st.select(channel = 'BH1')
+    bh2 = st.select(channel = 'BH2')
+    bhz = st.select(channel = 'BHZ')
+    
+    bh1_data = bh1[0].data
+    bh1_inc = bh1[0].stats.sac['cmpinc']
+    bh1_az = bh1[0].stats.sac['cmpaz']
+    
+    bh2_data = bh2[0].data
+    bh2_inc = bh2[0].stats.sac['cmpinc']
+    bh2_az = bh2[0].stats.sac['cmpaz']
+    
+    bhz_data = bhz[0].data
+    bhz_inc = bhz[0].stats.sac['cmpinc']
+    bhz_az = bhz[0].stats.sac['cmpaz']
+    
+    (Z,N,E) = rotate2zne(bhz_data, bhz_az, bhz_inc,
+                         bh1_data, bh1_az, bh1_inc,
+                         bh2_data, bh2_az, bh2_inc,
+                         )
+    
+    st.select(channel = 'BH1')[0].data = E
+    st.select(channel = 'BH2')[0].data = N
+    st.select(channel = 'BHZ')[0].data = Z
+    
+    return st 
+    
