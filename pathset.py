@@ -211,8 +211,10 @@ class PathSetter:
         Q = 'Q_{}'.format(ph)
         if (row[Q] < 0.5) and (row[Q] > -0.7):
             # print('Phase {} fails Q tests, continuing to next'.format(ph))
+#             print(row['DATE'],row[Q])
             res = False
         else:
+#             print(row['DATE'],row[Q],'pass')
             res = True
         return res
 
@@ -323,14 +325,13 @@ class PathSetter:
                     nf += 1
                     print('No file')
                     continue
-                if ph_good is True:                  
+                if ph_good is True:     
+                    print('Pass')
                     llat = row['{}_LM_LAT'.format(ph)]
                     llon = row['{}_LM_LON'.format(ph)]
                     lowmm_ops = self.loop_thru_domains(ldoms,llat,llon,"Lower",ph,crit,
                                                        attribs['evdp'],attribs['gcarc'],attribs['azi'])
-                    rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"RSide",
-                                                       ph,crit,attribs['evdp'],attribs['gcarc'],attribs['azi'])
-
+                    rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"RSide",                                                      ph,crit,attribs['evdp'],attribs['gcarc'],attribs['azi'])
                     if ph == 'ScS': # Only ScS needs source side domains
                         sside_ops = ['op']
                         if len(sdoms) > 0:
@@ -489,7 +490,8 @@ class PathSetter:
         Returns:
             counts (array-like) - a 2d numpy array (shape(1280,7)) that contains the counts for the number of phases that pass through each D`` and reciever side domain requested. 
         '''
-
+        date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
+        df = pd.read_csv('E_pacific_SNR10_goodQ_allphases.sdb',converters=date_time_convert,delim_whitespace=True)
         crit = 5.0 # [deg] the criteria distance 
         if Low_Domains is None:
             ldoms = self.doms.BIN.values
@@ -503,72 +505,36 @@ class PathSetter:
      
         doms = self.doms[self.doms.BIN.isin(ldoms) | self.doms.BIN.isin(rdoms)]
         print('Counting paths in domains {}'.format(doms.BIN.values))
-
-        rows2comp = ['DATE','TIME','STAT','EVLA','EVLO','EVDP','STLA','STLO','AZI','BAZ','DIST']
-        SnKSrows = ['Q_SKS','Q_SKKS','SKS_PP_LAT','SKS_PP_LON','SKKS_PP_LAT','SKKS_PP_LON']
-        SnKS_t = self.df_snks[rows2comp + SnKSrows]
-        if self.df_scs:
-            ScSrows = ['Q','SNR','BNCLAT','BNCLON']
-            ScS_t = self.df_scs[rows2comp + ScSrows]
-            pdf = pd.concat([ScS_t,SnKS_t],sort=False)
-            pdf.rename(columns=
-                       {'Q':'Q_ScS','SNR':'SNR_ScS','BNCLAT':'ScS_LM_LAT','BNCLON':'ScS_LM_LON',
-                                'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
-                                'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True) 
-        else:
-            print('SnKS Only')
-            pdf = SnKS_t
-            pdf.rename(columns=
-                       {'SKS_PP_LAT':'SKS_LM_LAT','SKS_PP_LON':'SKS_LM_LON',
-                        'SKKS_PP_LAT':'SKKS_LM_LAT','SKKS_PP_LON':'SKKS_LM_LON'},inplace=True)
         
-        counts = np.zeros([1280,7])
+        counts = np.zeros([1280,4])
 #         countsM = np.zeros([1280,1280])
         # initialise counts array for all 1280 domains. Cols [bin, ScS_Low, SKS_Low, SKKS_Low, ScS_R, SKS_R, SKKS_R]
-        for i, row in pdf.iterrows():
-            print(i)
-            for i,dom in doms.iterrows():
+
+        for i,dom in doms.iterrows():
+            for i, row in df.iterrows():
                 dlat, dlon = dom.MID_LAT, dom.MID_LON
                 dom_id = int(dom.BIN)
-                if self.df_scs:
-                    dist_scs = vincenty_dist(row.ScS_LM_LAT, row.ScS_LM_LON, dlat, dlon)[0]
-                else:
-                    dist_scs = crit + 1
-                dist_sks = vincenty_dist(row.SKS_LM_LAT, row.SKS_LM_LON, dlat, dlon)[0]
-                dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, dlat, dlon)[0]
+                dist_lowmm = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, dlat, dlon)[0]
+#                 dist_skks = vincenty_dist(row.SKKS_LM_LAT, row.SKKS_LM_LON, dlat, dlon)[0]
                 dist_rside = vincenty_dist(row.STLA, row.STLO, dlat, dlon)[0]
-                if (dist_scs <= crit):      
-                    counts[dom_id-1,0] = dom_id
-                    counts[dom_id-1,1] += 1
-                    
-                if (dist_sks <= crit):
-                    counts[dom_id-1,0] = dom_id
-                    counts[dom_id-1,2] += 1
-                    
-                if (dist_skks <= crit):
-                    counts[dom_id-1,0] = dom_id
-                    counts[dom_id-1,3] += 1
-                        
-                if (dist_rside <= crit):
-                    counts[dom_id-1,0] = dom_id
-                    if self.df_scs:
-                        # is there any scs data ?
-                        if np.isnan(row.SKS_LM_LAT):
-                            #If SKS Lat values are NaN then row is for ScS
-                            counts[dom_id-1,4] += 1                    
-                        if np.isnan(row.ScS_LM_LAT):
-                         #If ScS Lat values are NaN then row is SnKS (which sit in the same rside domain)
-                            counts[dom_id-1,5] += 1
-                            counts[dom_id-1,6] += 1
+                if (dist_lowmm <= crit) & (dom.BIN in ldoms):
+                    if row.PHASE == 'ScS':
+                        counts[dom_id-1,0] = dom_id
+                        counts[dom_id-1,1] += 1
+                    elif (row.PHASE == 'SKS') | (row.PHASE == 'SKKS'):
+                        counts[dom_id-1,0] = dom_id
+                        counts[dom_id-1,2] += 1
                     else:
-                        counts[dom_id-1,5] += 1
-                        counts[dom_id-1,6] += 1
-#         countsM = np.zeros([1280,1280])
-#         for i in range(0,1280):
-#             # rows are for ldoms
-#             for j in range(0,1280):
-#             # cols are for rdoms
-                
+                        raise ValueError('Phase code {} incorrect'.format(row.phase))                    
+#                 if (dist_rside <= crit) & (dom.BIN in rdoms):
+#                     print('RSIDE DOM: ',dom.BIN)
+#                     if row.PHASE == 'ScS':
+#                         counts[dom_id-1,0] = dom_id
+#                         counts[dom_id-1,4] += 1
+#                     elif (row.PHASE == 'SKS') | (row.PHASE == 'SKKS'):
+#                         counts[dom_id-1,0] = dom_id
+#                         counts[dom_id-1,5] += 1
+
         mask = np.all(np.equal(counts, 0), axis=1)                
         c_out = counts[~mask]
         print('Done')
@@ -651,3 +617,91 @@ class PathSetter:
         self.doms['Upper_Count'] = self.doms['BIN'].map(self.udom_c)
         self.doms = self.doms.fillna(0)
         self.doms.to_csv(file,sep=' ',index=False)
+
+def phases2sdb():
+    '''
+    Function to take data from multiple phases and make in into a single file to be used in Pathsetting
+    '''
+    date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
+    df = pd.read_csv('E_pacific_05.pairs',converters=date_time_convert,delim_whitespace=True)
+    df_snks = pd.read_csv('E_pacific_05_binned.pairs',converters=date_time_convert,delim_whitespace=True)
+    cols = ['TLAG_SKS','DTLAG_SKS','FAST_SKS','DFAST_SKS','TLAG_SKKS','DTLAG_SKKS','FAST_SKKS',
+            'DFAST_SKKS','SNR_SKS','SNR_SKKS']
+    df_snks[cols] = df[cols]
+    df_scs = pd.read_csv('ScS_w_bouncepoints_binned.sdb',converters=date_time_convert,delim_whitespace=True)
+    with open('E_pacific_all_data_binned.sdb','w+') as writer:  
+        writer.write('STAT DATE TIME PHASE EVLA EVLO EVDP STLA STLO DIST BAZ AZI LOWMM_LAT LOWMM_LON FAST DFAST TLAG DTLAG Q SNR LOWER_BIN RSIDE_BIN \n')  
+        for ph in ['SKS','SKKS']:         
+            pplon = '{}_PP_LON'.format(ph) 
+            pplat = '{}_PP_LAT'.format(ph) 
+            q = 'Q_{}'.format(ph) 
+            snr = 'SNR_{}'.format(ph) 
+            bn = '{}_BIN'.format(ph) 
+            fast = 'FAST_{}'.format(ph) 
+            dfast = 'DFAST_{}'.format(ph) 
+            tlag = 'TLAG_{}'.format(ph)  
+            dtlag = 'DTLAG_{}'.format(ph)  
+            for i,row in df_snks.iterrows():
+                writer.write('{} {} {} {} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {} {} \n'.format(
+                row['STAT'], row['DATE'], row['TIME'], ph,  row['EVLA'], row['EVLO'], row['EVDP'], 
+                row['STLA'],row['STLO'], row['DIST'], row['BAZ'], row['AZI'], row[pplat], row[pplon],
+                row[fast], row[dfast], row[tlag], row[dtlag], row[q], row[snr], row[bn], row['RSIDE_BIN'])) 
+        for i, row in df_scs.iterrows():
+            writer.write('{} {} {} {} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {:4.3f} {} {} \n'.format(
+            row['STAT'], row['DATE'], row['TIME'], 'ScS',  row['EVLA'], row['EVLO'], row['EVDP'], 
+            row['STLA'],row['STLO'], row['DIST'], row['BAZ'], row['AZI'], row['BNCLAT'], row['BNCLON'],
+            row['FAST'], row['DFAST'], row['TLAG'], row['DTLAG'], row['Q'], row['SNR'], row['LOWMM_BIN'], row['RSIDE_BIN']))
+    print('Done')
+
+def find_phases_in_domain(phasefile,dom_ID,layer='Lower',crit=5.0,save=False):
+    '''
+    This function searches the input phase file for all paths that go through the given domain (intended use is D'' domains). This subset of phases is then written out for future use.
+    '''
+    date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
+    df = pd.read_csv(phasefile,converters=date_time_convert,delim_whitespace=True)
+    domains = np.loadtxt('T3_global.bins',skiprows=1)
+#     dom = domains[domains[:,0] == dom_ID]
+    dom = domains[np.isin(domains[:,0],dom_ID)]
+    dlat = dom[0,1]
+    dlon = dom[0,2]
+    idx = [ ] # empty list to hold indexs of phases we want
+    for i, phase in df.iterrows():
+        if layer == 'Lower':
+            plat = phase.LOWMM_LAT
+            plon = phase.LOWMM_LON
+        elif phase == 'RSide':
+            plat = phase.STLA
+            plon = phase.STLO
+        
+        dist = vincenty_dist(dlat, dlon, plat, plon)[0]
+        if dist <= crit:
+            #Is the phase within a fixed distance from domain center
+            idx.append(i)
+    df_out = df.iloc[idx]
+    if save:
+        df_out.to_csv('Domain_{}_SNR10_goodQ_allphases.sdb'.format(dom_ID),index=False,sep=' ')
+    else:
+        return df_out
+    
+def split_by_stats(phasefile, stats):
+    '''
+    function to breakup phase list by station and write out these subsections
+    
+    Args: 
+        phasefile (str) - path to phase file to use
+        stats (array-like) - array of stations to iterate over
+    
+    Returns:
+    
+        writes out textfiles of phases lists for each station
+    '''
+    date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
+    df = pd.read_csv(phasefile,converters=date_time_convert,delim_whitespace=True)
+    
+    for stat in stats:
+        stat_df = df[df.STAT == stat]
+        print(stat, len(stat_df))
+        stat_df.to_csv('./StatCorr/{}_SNR10_goodQ_allphases.sdb'.format(stat),sep=' ',index=False)
+        
+    print('Done')
+        
