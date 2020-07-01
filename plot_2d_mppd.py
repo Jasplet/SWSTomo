@@ -21,7 +21,7 @@ from glob import glob
 import argparse
 ###############################
 
-def _plot_1d_ppd(ax,V,P,dompam,pthresh=0.95,orientation='vertical'):
+def _plot_1d_ppd(ax,V,P,pthresh=0.95,orientation='vertical'):
     '''
     Plot a 1-D marginal on the given axes object and returns the axes object (because I am not a bastard)
     ==== Input ====
@@ -122,12 +122,12 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
     px_cppd = P[icol,:] / P_y[icol]
     py_cppd = P[:,irow] / P_x[irow]
-    _plot_1d_ppd(ax_x,x,px_cppd,dp_x)
+    _plot_1d_ppd(ax_x,x,px_cppd)
     # ax_x.hist(x,x,weights=px_cppd,orientation='vertical',histtype='stepfilled')
 
     ax_x.invert_yaxis()
     # ax_y.hist(y,y,weights=py_cppd,orientation='horizontal',histtype='stepfilled')
-    _plot_1d_ppd(ax_y,y,py_cppd,dp_y,orientation='horizontal')
+    _plot_1d_ppd(ax_y,y,py_cppd,orientation='horizontal')
     # ax_y.set_ylim([-90,90])
     ax_y.invert_xaxis()
     ax_y.set_ylabel('{}'.format(dp_y))
@@ -177,6 +177,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-s","--save",action="store_true",help="saves MPPD plots")
     parser.add_argument("-f","--filename",default="plot",action="store",type=str,help="file name that will be appended to MPPD_xxx")
+    parser.add_argument("--fixed",action="store_true",help="Flag for if Domains has been fixed to only have one parameter")
     args = parser.parse_args()
 
     if args.save:
@@ -187,45 +188,74 @@ if __name__ == "__main__":
         print('Not Saving')
         # f_uid='placeholder'
         sv = False
-
+    
     n = glob('MTS_2D_MPPD*.xy')
     idx = [f.split('.')[1] for f in n]
     idx.sort() # sort idx in ascending order (for tidyness sake)
+    
+    if args.fixed:
 
-    with open('MTS_most_likely.results','w') as writer:
-        writer.write('Layer Domain Gamma Strength\n')
-        for i,dom in enumerate(idx):
-            print(i,dom)
-            P = np.loadtxt('MTS_2D_MPPD.{}.p'.format(dom),skiprows=1) # Skip header line
-            # Read the headers
-            with open('MTS_2D_MPPD.{}.p'.format(dom),'r') as reader:
-                h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
-                dps = h.split('-')
-                layer = dps[0].split('_')[0]  
-                print(layer)      
-                try:
-                    domain = dps[0].split('_')[1].split(':')[0]
-                    dp_x = dps[0]
-                    dp_y = dps[1]
-                except IndexError:
-                    domain="First"
-                    dp_x = "X"
-                    dp_y = "Y"
+        P = np.loadtxt('MTS_1D_MPPD.p',comments='%')
+        df1d = pd.read_csv('MTS_1D_MPPD.p',delimiter='%',names=['data','dom_par'])
+        dom_par = df1d.dom_par.values
+        X = np.loadtxt('MTS_1D_MPPD.x',comments='%')
+        n = P.size / 50 
+        for i in range(0,int(n)):
+            d_par_i = dom_par[i]
+            if d_par_i.split(':')[-1] == 's':
+                # Is this dom-par pair for strength?
+                dom = d_par_i.split(':')[0].strip(" ")
+                print(dom)
+                fig = plt.figure()
+                ax = fig.add_subplot(111)
+                if n == 1:
+                    _plot_1d_ppd(ax, X, P)
+                else:
+                    _plot_1d_ppd(ax, x, p)
+                gamma = input('Enter fixed gamma >')
+                ax.set_title('1D PPD for {}. Gamma = {}'.format(dom,gamma))
+                ax.set_xlabel('Strength Parameter')
+                ax.set_ylabel('p')
+                ax.set_xlim([0,0.05])
+                if sv == True:
+                    plt.savefig('{}_s_1D_PPD.png'.format(dom),format='png',dpi=400)
+                else:
+                    plt.show()
+    else:
 
-                XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
-                # For each MPPD find most likely solution
-                (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
-                gamma = XY[0][icol]
-                s = XY[1][irow]
-                writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
-                # if layer == ' RSide':
-                #     print('Skip plotting for Rside corr domains')
-                #     continue
-                # else:
-                plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
-    # Do stuff (plotting mainly)
+        with open('MTS_most_likely.results','w') as writer:
+            writer.write('Layer Domain Gamma Strength\n')
+            for i,dom in enumerate(idx):
+                print(i,dom)
+                P = np.loadtxt('MTS_2D_MPPD.{}.p'.format(dom),skiprows=1) # Skip header line
+                # Read the headers
+                with open('MTS_2D_MPPD.{}.p'.format(dom),'r') as reader:
+                    h = reader.readline().strip('%') # read header line and get rid of that pesky % symbol
+                    dps = h.split('-')
+                    layer = dps[0].split('_')[0]  
+                    print(layer)      
+                    try:
+                        domain = dps[0].split('_')[1].split(':')[0]
+                        dp_x = dps[0]
+                        dp_y = dps[1]
+                    except IndexError:
+                        domain = dps[0].split(':')[0]
+                    
+                        dp_x = dps[0]
+                        dp_y = dps[1].strip('\n')
 
+                    XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
+                    # For each MPPD find most likely solution
+                    (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
+                    gamma = XY[0][icol]
+                    s = XY[1][irow]
+                    writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
+                    # if layer == ' RSide':
+                    #     print('Skip plotting for Rside corr domains')
+                    #     continue
+                    # else:
+                    plot_2d_mppd(P,XY,dp_x,dp_y,sv,args.filename)
+        # Do stuff (plotting mainly)
 
-    write_out_most_likely(domain,gamma,s)
     # plt.show()
 # EOF
