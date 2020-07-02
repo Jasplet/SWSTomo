@@ -418,9 +418,10 @@ def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
     ax.set_extent(extent, crs=ccrs.PlateCarree())      
     ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='auto')) #coastline data
     draw_trigonal_doms(ax, doms2plot)
-    for i, path in data.iterrows():
-        ax.plot([path.LOWMM_LON, path.STLO], [path.LOWMM_LAT, path.STLA], 'k-',
-               transform=ccrs.Geodetic())
+    for i, path in data.iterrows():    
+        ax.text(path.STLO, path.STLA+1, path.STAT, fontsize=12)
+#         ax.plot([path.LOWMM_LON, path.STLO], [path.LOWMM_LAT, path.STLA], 'k-',
+#                transform=ccrs.Geodetic())
     ax.plot(scs.LOWMM_LON, scs.LOWMM_LAT, markeredgecolor='black',
             linestyle='',color='cornflowerblue', marker='o', transform=proj, label='ScS', markersize=8)
     ax.plot(sks.LOWMM_LON, sks.LOWMM_LAT, markeredgecolor='black',
@@ -433,6 +434,7 @@ def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
            transform=proj, color='orange', markeredgecolor='black', label='SKS Stations')
     ax.plot(skks.STLO, skks.STLA, linestyle='', marker = 'v', markersize=10, 
            transform=proj, color='mediumseagreen', markeredgecolor='black', label='SKKS Stations')
+
     
     ax.text(-151,67, '{} ScS phases'.format(len(scs)))
     ax.text(-151,65.75, '{} SKS phases'.format(len(sks)))
