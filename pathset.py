@@ -701,7 +701,7 @@ def split_by_stats(phasefile, stats):
     for stat in stats:
         stat_df = df[df.STAT == stat]
         print(stat, len(stat_df))
-        stat_df.to_csv('./StatCorr/{}_SNR10_goodQ_allphases.sdb'.format(stat),sep=' ',index=False)
+        stat_df.to_csv('./StatCorr/{}_goodQ.sdb'.format(stat),sep=' ',index=False)
         
     print('Done')
         
