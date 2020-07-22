@@ -366,9 +366,9 @@ def low_most_mantle_phasecounts(cfile='ScS_SnKS.counts', extent=[-170,-60,0,70],
     if save:
         fig.savefig('highquality_lowMM_coverage.png',format='png',dpi=400)
     
-def plot_phase_data(file='E_pacific_SNR10_goodQ_allphases.sdb'):
+def plot_phase_data(file='E_pacific_SNR10_goodQ.sdb',save=False,fname=None):
     '''
-    function to plot input phase data. currently written to ONLY expect ScS 
+    function to plot input phase data.
     '''
     proj = ccrs.PlateCarree()
     fig = plt.figure(figsize=(10,8))
@@ -385,20 +385,23 @@ def plot_phase_data(file='E_pacific_SNR10_goodQ_allphases.sdb'):
     crit = (data.LOWMM_LON > -170) & (data.LOWMM_LAT > 0)
     ax.plot(data.EVLO[crit], data.EVLA[crit], color='black', marker='*', markersize=10,
             label='ScS Events', linestyle='', transform=proj)
-#     ax.plot(data.STLO[crit], data.STLA[crit], markerfacecolor='red', markersize=8,
-#             markeredgecolor='black', linestyle='', marker='v', transform=proj, label='Stations')
+    ax.plot(scs.STLO[crit], scs.STLA[crit], markerfacecolor='red', markersize=8,
+            markeredgecolor='black', linestyle='', marker='v', transform=proj, label='Stations')
     ax.plot(scs.LOWMM_LON[crit], scs.LOWMM_LAT[crit], color='blue', markeredgecolor='black',
             linestyle='', marker='o', transform=proj, label='ScS', markersize=8)
-    ax.plot(sks.LOWMM_LON[crit], sks.LOWMM_LAT[crit], color='red', markeredgecolor='black',
-            linestyle='', marker='o', transform=proj, label='SKS', markersize=8)
-    ax.plot(skks.LOWMM_LON[crit], skks.LOWMM_LAT[crit], color='orange', markeredgecolor='black',
-            linestyle='', marker='o', transform=proj, label='SKKS', markersize=8)
+#     ax.plot(sks.LOWMM_LON[crit], sks.LOWMM_LAT[crit], color='red', markeredgecolor='black',
+#             linestyle='', marker='o', transform=proj, label='SKS', markersize=8)
+#     ax.plot(skks.LOWMM_LON[crit], skks.LOWMM_LAT[crit], color='orange', markeredgecolor='black',
+#             linestyle='', marker='o', transform=proj, label='SKKS', markersize=8)
 #         ax.plot(scs.ENTLON, scs.ENTLAT, color='green', markeredgecolor='black', linestyle='', marker='>', transform=proj)
 #         ax.plot(scs.EXTLON, scs.EXTLON, color='green', markeredgecolor='black', linestyle='', marker='<', transform=proj)
     ax.legend()
-    ax.set_title('ScS Data')
+    title = ' '.join(fname.split('_'))
+    ax.set_title(title)
     grd = ax.gridlines(draw_labels=True,linewidth=0)
-    grd.xlabels_top = None
+    grd.top_labels = None
+    if save:
+        plt.savefig('{}.png'.format(fname),dpi=600)
     
 def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
     '''
