@@ -471,64 +471,64 @@ class PathSetter:
                 f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(
                     attribs['stat'],ph,attribs['stat'],attribs['date'],attribs['time'],ph)
 
-            ph_good = self.is_phase_good(row,ph) 
+#             ph_good = self.is_phase_good(row,ph) 
             # Test if phases are "good" splits or nulls
             try:
                 fileID = glob.glob(f)[0].strip('.mts').split('/')[-1]
                 # Strip out .mts and split by '/', select end to get filestem
             except IndexError:
                 continue
-            if ph_good is True:     
-                statdom = 'Station_{}'.format(attribs['stat'])
-                stat_op = self.domain2operator(statdom,ph,attribs['evdp'],
-                                                   attribs['gcarc'],attribs['azi'])
-                if ph == 'ScS': # Only ScS needs source side domains
-                    dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],
-                                                     attribs['date'],attribs['time'])
-                    print(dom_id)
-                    sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
-                                         attribs['azi'])    
-                    print(sside_op)
-                lowmm_ops = [0]
-                if stat_only:
-                    lowmm_ops = [False]
-                else:
-                    ldom_id = 'Lower_{}'.format(lower_dom_no)
-                    dlat = ldoms.MID_LAT.values[0]
-                    dlon = ldoms.MID_LON.values[0]
-                    print(dlon)
-                    dist = vincenty_dist(row['LOWMM_LAT'], row['LOWMM_LON'],dlat, dlon )[0]
-                    if dist < crit:
-                        print('{} {}'.format(attribs['stat'],ph))
-                        lowmm_ops[0] = self.domain2operator(ldom_id,ph,attribs['evdp'],
+#             if ph_good is True:     
+            statdom = 'Station_{}'.format(attribs['stat'])
+            stat_op = self.domain2operator(statdom,ph,attribs['evdp'],
                                                attribs['gcarc'],attribs['azi'])
-                    else:
-                        print('Path for {} {} too far from domain {} deg'.format(
-                        attribs['stat'],ph, dist))
-                        continue
+            if ph == 'ScS': # Only ScS needs source side domains
+                dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],
+                                                 attribs['date'],attribs['time'])
+                print(dom_id)
+                sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
+                                     attribs['azi'])    
+                print(sside_op)
+            lowmm_ops = [0]
+            if stat_only:
+                lowmm_ops = [False]
+            else:
+                ldom_id = 'Lower_{}'.format(lower_dom_no)
+                dlat = ldoms.MID_LAT.values[0]
+                dlon = ldoms.MID_LON.values[0]
+                print(dlon)
+                dist = vincenty_dist(row['LOWMM_LAT'], row['LOWMM_LON'],dlat, dlon )[0]
+                if dist < crit:
+                    print('{} {}'.format(attribs['stat'],ph))
+                    lowmm_ops[0] = self.domain2operator(ldom_id,ph,attribs['evdp'],
+                                           attribs['gcarc'],attribs['azi'])
+                else:
+                    print('Path for {} {} too far from domain {} deg'.format(
+                    attribs['stat'],ph, dist))
+                    continue
 
-                for m,l_op in enumerate(lowmm_ops):
-                    get_sac(fileID,attribs['stat'],ph)
-                    # Now make XML for this Path
-                    path = ElementTree.SubElement(pathset,'path')
-                    pathname = 'Path {} {}'.format(p,ph)          
-                    path_uid = ElementTree.SubElement(path,'path_uid')
-                    path_uid.text = pathname
-                    # Add Data (from .mts)
-                    data = get_mts(fileID,attribs['stat'],ph)
-                    path.append(data)
-                    stat_uid = ElementTree.SubElement(path,'station_uid')
-                    stat_uid.text = attribs['stat']
-                    evt_uid = ElementTree.SubElement(path,'event_uid')
-                    evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
-                    if ph == 'ScS':
-                        print('Add SSide Operator to path')
-                        path.append(sside_op)
-                    if l_op:
-                        print("Add D`` Operator")
-                        path.append(l_op) 
-                    path.append(stat_op)
-                    p+=1
+            for m,l_op in enumerate(lowmm_ops):
+                get_sac(fileID,attribs['stat'],ph)
+                # Now make XML for this Path
+                path = ElementTree.SubElement(pathset,'path')
+                pathname = 'Path {} {}'.format(p,ph)          
+                path_uid = ElementTree.SubElement(path,'path_uid')
+                path_uid.text = pathname
+                # Add Data (from .mts)
+                data = get_mts(fileID,attribs['stat'],ph)
+                path.append(data)
+                stat_uid = ElementTree.SubElement(path,'station_uid')
+                stat_uid.text = attribs['stat']
+                evt_uid = ElementTree.SubElement(path,'event_uid')
+                evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
+                if ph == 'ScS':
+                    print('Add SSide Operator to path')
+                    path.append(sside_op)
+                if l_op:
+                    print("Add D`` Operator")
+                    path.append(l_op) 
+                path.append(stat_op)
+                p+=1
         #Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
