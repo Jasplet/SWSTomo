@@ -389,12 +389,12 @@ def plot_phase_data(file='E_pacific_SNR10_goodQ.sdb',save=False,fname=None):
             markeredgecolor='black', linestyle='', marker='v', transform=proj, label='Stations')
     ax.plot(scs.LOWMM_LON[crit], scs.LOWMM_LAT[crit], color='blue', markeredgecolor='black',
             linestyle='', marker='o', transform=proj, label='ScS', markersize=8)
-#     ax.plot(sks.LOWMM_LON[crit], sks.LOWMM_LAT[crit], color='red', markeredgecolor='black',
-#             linestyle='', marker='o', transform=proj, label='SKS', markersize=8)
-#     ax.plot(skks.LOWMM_LON[crit], skks.LOWMM_LAT[crit], color='orange', markeredgecolor='black',
-#             linestyle='', marker='o', transform=proj, label='SKKS', markersize=8)
-#         ax.plot(scs.ENTLON, scs.ENTLAT, color='green', markeredgecolor='black', linestyle='', marker='>', transform=proj)
-#         ax.plot(scs.EXTLON, scs.EXTLON, color='green', markeredgecolor='black', linestyle='', marker='<', transform=proj)
+    ax.plot(sks.LOWMM_LON[crit], sks.LOWMM_LAT[crit], color='red', markeredgecolor='black',
+            linestyle='', marker='o', transform=proj, label='SKS', markersize=8)
+    ax.plot(skks.LOWMM_LON[crit], skks.LOWMM_LAT[crit], color='orange', markeredgecolor='black',
+            linestyle='', marker='o', transform=proj, label='SKKS', markersize=8)
+#     ax.plot(scs.ENTLON, scs.ENTLAT, color='green', markeredgecolor='black', linestyle='', marker='>', transform=proj)
+#     ax.plot(scs.EXTLON, scs.EXTLON, color='green', markeredgecolor='black', linestyle='', marker='<', transform=proj)
     ax.legend()
     title = ' '.join(fname.split('_'))
     ax.set_title(title)
@@ -403,7 +403,7 @@ def plot_phase_data(file='E_pacific_SNR10_goodQ.sdb',save=False,fname=None):
     if save:
         plt.savefig('{}.png'.format(fname),dpi=600)
     
-def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
+def map_single_domain_phases(phasefile,dom_ID,stations,extent=[-155,-100,30,70]):
     '''
     This function draws a map for a single domain (or potentially multiple domains in the future) along with the phase locations in D`` and the station locations
     '''
@@ -413,31 +413,35 @@ def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
     scs = data[data.PHASE == 'ScS']
     sks = data[data.PHASE == 'SKS']
     skks = data[data.PHASE == 'SKKS']
+    stats = data[data.STAT.isin(stations)]
     count = len(data)
     # Draw figure
     proj = ccrs.PlateCarree()
-    fig = plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(7,7))
     ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
     ax.set_extent(extent, crs=ccrs.PlateCarree())      
     ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='auto')) #coastline data
     draw_trigonal_doms(ax, doms2plot)
-    for i, path in data.iterrows():    
-        ax.text(path.STLO, path.STLA+1, path.STAT, fontsize=12)
-#         ax.plot([path.LOWMM_LON, path.STLO], [path.LOWMM_LAT, path.STLA], 'k-',
-#                transform=ccrs.Geodetic())
     ax.plot(scs.LOWMM_LON, scs.LOWMM_LAT, markeredgecolor='black',
-            linestyle='',color='cornflowerblue', marker='o', transform=proj, label='ScS', markersize=8)
+            linestyle='',color='cornflowerblue', marker='o', transform=proj,
+            label='ScS', markersize=8)
     ax.plot(sks.LOWMM_LON, sks.LOWMM_LAT, markeredgecolor='black',
-            linestyle='', color='orange', marker='s', transform=proj, label='SKS', markersize=8)
+            linestyle='', color='orange', marker='s', transform=proj,
+            label='SKS', markersize=8)
     ax.plot(skks.LOWMM_LON, skks.LOWMM_LAT, markeredgecolor='black',
-            linestyle='', color='mediumseagreen', marker='p', transform=proj, label='SKKS', markersize=8)
-    ax.plot(scs.STLO, scs.STLA, linestyle='', marker = 'v', markersize=10, 
-           transform=proj, color='cornflowerblue', markeredgecolor='black', label='ScS Stations')
-    ax.plot(sks.STLO, sks.STLA, linestyle='', marker = 'v', markersize=10, 
-           transform=proj, color='orange', markeredgecolor='black', label='SKS Stations')
-    ax.plot(skks.STLO, skks.STLA, linestyle='', marker = 'v', markersize=10, 
-           transform=proj, color='mediumseagreen', markeredgecolor='black', label='SKKS Stations')
-
+            linestyle='', color='mediumseagreen', marker='p', transform=proj,
+            label='SKKS', markersize=8)
+    ax.plot(data.STLO, data.STLA, linestyle='', marker = 'v', markersize=9,
+                transform=proj, color='grey')
+    
+    ax.plot(stats.STLO, stats.STLA, linestyle='', marker = 'v', markersize=14, 
+       transform=proj, color='red', markeredgecolor='black', label='Stations')
+   
+    
+    for i, stat in stats.iterrows():
+        ax.text(stat.STLO+2, stat.STLA, stat.STAT, fontsize=12)
+        ax.plot([stat.LOWMM_LON, stat.STLO], [stat.LOWMM_LAT, stat.STLA], 'k-',
+           transform=ccrs.Geodetic()) 
     
     ax.text(-151,67, '{} ScS phases'.format(len(scs)))
     ax.text(-151,65.75, '{} SKS phases'.format(len(sks)))
@@ -447,4 +451,5 @@ def map_single_domain_phases(phasefile,dom_ID,extent=[-155,-100,30,70]):
     grd = ax.gridlines(draw_labels=True,linewidth=0.5)
     grd.top_labels = None
     
-    plt.savefig('Phases_in_domain_lower_{}.png'.format(dom_ID),format='png',dpi=400,)
+    plt.savefig('Phases_in_domain_lower_{}.png'.format(dom_ID),format='png',dpi=400,
+                bbox_inches='tight')
