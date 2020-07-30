@@ -35,7 +35,7 @@ def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None):
     if sc :
         s = ElementTree.SubElement(domain, 'strength', type="fixed", value=str(sc))
     else:
-        s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.05",init="0.0125")
+        s = ElementTree.SubElement(domain, 'strength', type="linear",min="0.00",max="0.02",init="0.01")
 
     return domain
 

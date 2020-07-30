@@ -101,19 +101,17 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     i - [str]. A 3 digits code ('001') that corresponds to the MPPD that we want to plot
     '''
     # Remove line above when devel is done
-
     x = XY[0] # array of X-parameters
     y = XY[1] # array of Y-parameters
     # Get Header of .p file for domain labels
-
-
     (X,Y) = np.meshgrid(x,y)
-
-    fig = plt.figure(figsize = (8,8))
-    axs = gs(4,4, hspace =0.3, wspace=0.3)
+    
+    fig = plt.figure(figsize = (10,10))
+    axs = gs(ncols = 5,nrows = 4, hspace =0.3, wspace=0.3)
     ax_y = fig.add_subplot(axs[:-1,0])
-    ax_x = fig.add_subplot(axs[-1,1:])
-    ax_main = fig.add_subplot(axs[:-1,1:],sharey=ax_y,sharex=ax_x)
+    ax_x = fig.add_subplot(axs[-1,1:-1])
+    ax_main = fig.add_subplot(axs[:-1,1:-1],sharey=ax_y,sharex=ax_x)
+    ax_c = fig.add_subplot(axs[:-1,-1])
 
     # Calc 1D Marginals
     P_x = P.sum(axis=0)
@@ -122,12 +120,12 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
     px_cppd = P[icol,:] / P_y[icol]
     py_cppd = P[:,irow] / P_x[irow]
-    _plot_1d_ppd(ax_x,x,px_cppd)
+    _plot_1d_ppd(ax_x,x,P_x)
     # ax_x.hist(x,x,weights=px_cppd,orientation='vertical',histtype='stepfilled')
 
     ax_x.invert_yaxis()
     # ax_y.hist(y,y,weights=py_cppd,orientation='horizontal',histtype='stepfilled')
-    _plot_1d_ppd(ax_y,y,py_cppd,orientation='horizontal')
+    _plot_1d_ppd(ax_y,y,P_y,orientation='horizontal')
     # ax_y.set_ylim([-90,90])
     ax_y.invert_xaxis()
     ax_y.set_ylabel('{}'.format(dp_y))
@@ -135,33 +133,42 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     ax_x.set_xlabel('{}'.format(dp_x))
     ax_x.set_ylabel('p({})'.format(dp_x))
 
-    # plt.colorbar(C)
-    print(x.max())
-    if x.max() == 0.0495: # This is the max value of unrestricted domain:
-        ax_extent= (0,0.05,-90,90)
-        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower',interpolation='gaussian')
-        ax_x.set_xticks([0,0.005,0.01,0.015,0.02,0.025,0.03,0.035,0.04,0.045,0.05])
-        ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
-        ax_x.set_xlim([0,0.05])
-        ax_y.set_ylim([-90,90])
-    else:
-        print('Resricted Domain, adjusting scale')
-        ax_extent = (0,np.around(x.max(),decimals=2),np.around(y.min(),decimals=0),np.around(y.max(),decimals=0))
-        ax_main.imshow(P,extent = ax_extent,aspect='auto',origin='lower')
-        print(ax_extent)
-        ax_x.set_xlim([np.around(x.min(),decimals=2),np.around(x.max(),decimals=2)])
-        ax_y.set_ylim([np.around(y.min(),decimals=0),np.around(y.max(),decimals=0)])
+    xdiff = abs(x[1] - x[0])
+    ydiff = abs(y[1] - y[0])
+    print(xdiff)
+    xmax = x.max() + (xdiff/2)
+    xmin = x.min() - (xdiff/2)
+    ymax = y.max() + (ydiff/2)
+    ymin = y.min() - (ydiff/2)
 
+    ax_extent= (xmin, xmax, ymin, ymax)
+    xlim = [xmin, xmax]
+    ylim = [ymin, ymax]
+    C = ax_main.imshow(P,extent = ax_extent,aspect='auto',
+                   origin='lower',interpolation='none')
+    ax_x.set_xticks(np.linspace(xmin, xmax, 9))
+    ax_y.set_yticks(np.linspace(ymin, ymax, 13))
+    ax_x.set_xlim(xlim)
+    ax_y.set_ylim(ylim)
+    plt.colorbar(C,cax=ax_c)
+        
     ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     print(r'Most likely (maxima) points is $\gamma = ${}, $s = ${}'.format(y[irow],x[icol]))
     plt.setp(ax_main.get_xticklabels(),visible=False)
     plt.setp(ax_main.get_yticklabels(),visible=False)
 
-    plt.title('MPPD for Domain {}'.format(dp_x.split(':')[0]))
+    ax_main.set_title('MPPD {}-{} for Domain {}'.format(dp_y.split(':')[1].strip('\n'), 
+                                                dp_x.split(':')[1].strip('\n'),
+                                                dp_x.split(':')[0]))
     # fig,ax = plt.subplots(1,1)
     # _plot_1d_ppd(ax,x,px_cppd,dp_x)
     if sv == True:
-        plt.savefig('MPPD_{}_{}.png'.format(dp_x.split(':')[0].strip(' '),f_uid),format='png',dpi=400)
+        print(dp_y.split(':')[1].strip('\n'))
+        print(dp_x.split(':')[1].strip('\n'))
+        plt.savefig('MPPD_{}_{}_{}_{}.png'.format(dp_y.split(':')[1].strip('\n'), 
+                                                  dp_x.split(':')[1].strip('\n'),
+                                                  dp_x.split(':')[0].strip(' '),
+                                                  f_uid),format='png',dpi=400)
     else:
         plt.show()
 
@@ -247,8 +254,8 @@ if __name__ == "__main__":
                     XY = np.loadtxt('MTS_2D_MPPD.{}.xy'.format(dom)) # Two-row file containing X and Y parameters
                     # For each MPPD find most likely solution
                     (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
-                    gamma = XY[0][icol]
-                    s = XY[1][irow]
+                    gamma = XY[0][irow]
+                    s = XY[1][icol]
                     writer.write('{} {} {:5.3f} {:5.3f}\n'.format(layer,domain,gamma,s))
                     # if layer == ' RSide':
                     #     print('Skip plotting for Rside corr domains')
