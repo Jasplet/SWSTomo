@@ -120,12 +120,12 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     (irow,icol) = np.unravel_index(np.argmax(P,axis=None),P.shape)
     px_cppd = P[icol,:] / P_y[icol]
     py_cppd = P[:,irow] / P_x[irow]
-    _plot_1d_ppd(ax_x,x,px_cppd)
+    _plot_1d_ppd(ax_x,x,P_x)
     # ax_x.hist(x,x,weights=px_cppd,orientation='vertical',histtype='stepfilled')
 
     ax_x.invert_yaxis()
     # ax_y.hist(y,y,weights=py_cppd,orientation='horizontal',histtype='stepfilled')
-    _plot_1d_ppd(ax_y,y,py_cppd,orientation='horizontal')
+    _plot_1d_ppd(ax_y,y,P_y,orientation='horizontal')
     # ax_y.set_ylim([-90,90])
     ax_y.invert_xaxis()
     ax_y.set_ylabel('{}'.format(dp_y))
@@ -133,38 +133,24 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     ax_x.set_xlabel('{}'.format(dp_x))
     ax_x.set_ylabel('p({})'.format(dp_x))
 
-    
-    print(x.max())
-    if x.max() == 0.0396: # This is the max value of unrestricted domain:
-        ax_extent= (0,0.04,-90,90)
-        xlim = [0, 0.04]
-        ylim = [-90, 90]
-        C = ax_main.imshow(P,extent = ax_extent,aspect='auto',
-                       origin='lower',interpolation='none')
-        ax_x.set_xticks([0,0.005,0.01,0.015,0.02, 0.025,0.03,0.035,0.04])#,0.045,0.05])
-        ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
-        ax_x.set_xlim(xlim)
-        ax_y.set_ylim(ylim)
-        plt.colorbar(C,cax=ax_c)
-    elif x.max() == 88.2: # Max value where alpha, beta, gamma is on x-axis
-        ax_extent = (-90, 90, -90, 90)
-        C = ax_main.imshow(P,extent = ax_extent,aspect='auto',
-               origin='lower',interpolation='none')
-        ax_x.set_xticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
-        ax_y.set_yticks([-90,-75,-60,-45,-30,-15,0,15,30,45,60,75,90])
-        ax_x.set_xlim([-90, 90])
-        ax_y.set_ylim([-90, 90])
-        plt.colorbar(C,cax=ax_c)
-    else:
-        print('Restricted Domain, adjusting scale')
-        ax_extent = (np.around(x.min(),decimals=3),np.around(x.max(),decimals=3),
-                     np.around(y.min(),decimals=0),np.around(y.max(),decimals=0))
-        C = ax_main.imshow(P,extent = ax_extent,aspect='auto',
-                       origin='lower',interpolation='gaussian')
-        print(ax_extent)
-        ax_x.set_xlim([np.around(x.min(),decimals=3),np.around(x.max(),decimals=3)])
-        ax_y.set_ylim([np.around(y.min(),decimals=0),np.around(y.max(),decimals=0)])
-        plt.colorbar(C,cax=ax_c)
+    xdiff = abs(x[1] - x[0])
+    ydiff = abs(y[1] - y[0])
+    print(xdiff)
+    xmax = x.max() + (xdiff/2)
+    xmin = x.min() - (xdiff/2)
+    ymax = y.max() + (ydiff/2)
+    ymin = y.min() - (ydiff/2)
+
+    ax_extent= (xmin, xmax, ymin, ymax)
+    xlim = [xmin, xmax]
+    ylim = [ymin, ymax]
+    C = ax_main.imshow(P,extent = ax_extent,aspect='auto',
+                   origin='lower',interpolation='none')
+    ax_x.set_xticks(np.linspace(xmin, xmax, 9))
+    ax_y.set_yticks(np.linspace(ymin, ymax, 13))
+    ax_x.set_xlim(xlim)
+    ax_y.set_ylim(ylim)
+    plt.colorbar(C,cax=ax_c)
         
     ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     print(r'Most likely (maxima) points is $\gamma = ${}, $s = ${}'.format(y[irow],x[icol]))
@@ -215,6 +201,7 @@ if __name__ == "__main__":
     idx.sort() # sort idx in ascending order (for tidyness sake)
     
     if args.fixed:
+
         P = np.loadtxt('MTS_1D_MPPD.p',comments='%')
         df1d = pd.read_csv('MTS_1D_MPPD.p',delimiter='%',names=['data','dom_par'])
         dom_par = df1d.dom_par.values
