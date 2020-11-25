@@ -443,13 +443,59 @@ def map_single_domain_phases(phasefile,dom_ID,stations,extent=[-155,-100,30,70])
         ax.plot([stat.LOWMM_LON, stat.STLO], [stat.LOWMM_LAT, stat.STLA], 'k-',
            transform=ccrs.Geodetic()) 
     
-    ax.text(-151,67, '{} ScS phases'.format(len(scs)))
-    ax.text(-151,65.75, '{} SKS phases'.format(len(sks)))
-    ax.text(-151,64.5, '{} SKKS phases'.format(len(skks)))
-    ax.set_title(r"Phases passing through domain Lower {}".format(dom_ID))
+    ax.text(-151,67, '2 ScS phases'.format(len(scs)))
+    ax.text(-151,65.75, '2 SKS phases'.format(len(sks)))
+    ax.text(-151,64.5, '3 SKKS phases'.format(len(skks)))
+    # ax.set_title(r"Phases passing through domain Lower {}".format(dom_ID))
+    ax.set_title(f'Phases in target domain')
     ax.legend()
     grd = ax.gridlines(draw_labels=True,linewidth=0.5)
     grd.top_labels = None
     
     plt.savefig('Phases_in_domain_lower_{}.png'.format(dom_ID),format='png',dpi=400,
                 bbox_inches='tight')
+    
+def map_station_correction_phases(phasefile,station,extent=[-150,-100,30,70],save=False):
+    '''
+    This function maps all the phases used to invert for the station correction for a given station. This allows us to assess how good the coverage is (or isnt!)
+    
+    Args:
+        phasefile [str] - path to the dataset being used
+        station [str] - station to make the plot for
+        save [bool] - switch for if you want to save the plot or just show it
+        
+    Returns:
+        A map showing the input station and all phases (in the datafile) recorded at it, on the assumption they are all used to invert for the station correction
+    '''
+    domains = np.loadtxt('T3_global.bins',skiprows=1)
+    dom1160 = domains[np.isin(domains[:,0],1160)] # Hard coded for now as we are only looking at D1160
+    alldata = pd.read_csv(phasefile,delim_whitespace=True)
+    data = alldata[alldata.STAT == station]
+    scs = data[data.PHASE == 'ScS']
+    sks = data[data.PHASE == 'SKS']
+    skks = data[data.PHASE == 'SKKS']
+    print(alldata)
+    proj = ccrs.PlateCarree()
+    fig = plt.figure(figsize=(7,7))
+    ax = fig.add_subplot(111,projection=ccrs.PlateCarree())
+    ax.set_extent(extent, crs=ccrs.PlateCarree())      
+    ax.add_feature(cfeature.GSHHSFeature(levels=[1],scale='auto')) #coastline data
+    draw_trigonal_doms(ax, dom1160)
+
+    ax.plot(data.STLO, data.STLA, linestyle='', marker = 'v', markersize=14, 
+       transform=proj, color='red', markeredgecolor='black', label='Stations')
+#     ax.plot(scs.LOWMM_LON, scs.LOWMM_LAT, markeredgecolor='black',
+#             linestyle='',color='cornflowerblue', marker='o', transform=proj,
+#             label='ScS', markersize=8)
+    ax.plot(sks.LOWMM_LON, sks.LOWMM_LAT, markeredgecolor='black',
+            linestyle='', color='orange', marker='s', transform=proj,
+            label='SKS', markersize=8)
+    ax.plot(skks.LOWMM_LON, skks.LOWMM_LAT, markeredgecolor='black',
+            linestyle='', color='mediumseagreen', marker='p', transform=proj,
+            label='SKKS', markersize=8)
+    ax.legend()
+    grd = ax.gridlines(draw_labels=True,linewidth=0.5)
+    
+    if save:
+        plt.savefig('./Figures/{}_SC_phasemap.png'.format(station),bbox_inches='tight')
+        
