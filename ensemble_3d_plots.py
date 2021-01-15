@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 import mplstereonet
 from numpy import deg2rad, rad2deg, sin, cos
 import numpy as np
+from skimage import measure
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 def plot_ags_models(Ensemble):
     '''
@@ -47,40 +49,64 @@ def plot_3d_pdf(Ensemble):
     strength = Ensemble.samples_3d[2,:]
     ax.scatter(alpha, gamma, strength, c=Ensemble.pdf_3d)
 
-def plot_pdf_slice(Ensemble, param, value, nsamps = 100):
-    '''plot a 2d slice through a for a requested param. Interpolatre and resample 3-d PDF'''
-    points, slc = Ensemble.slice_from_3d_pdf(param, value, nsamps)
+def plot_model_slices(Ensemble, model, nsamps = 100):
+    '''plot a 2d slicethrough PDF for a inout model point'''
+    # Check model
+    if len(model) == 3:
+       print('Plotting 2-D sections through model')
+       print(f'alpha = {model[0]}')
+       print(f'gamma = {model[1]}')
+       print(f'strength = {model[2]}')
+    
 
-    fig = plt.figure()
-    if param == 'alpha':
-        # Plot gamma v strength, polar plot
-        gg = deg2rad(points[:,1].reshape(nsamps, nsamps))
-        ss = points[:,2].reshape(nsamps, nsamps)
-        ax = fig.add_subplot(111, projection='polar')
-        ax.contourf(gg, ss, slc)
-    elif param == 'gamma':
-        # Plot alpha v strength, plot plot 
-        aa = deg2rad(points[:,0].reshape(nsamps, nsamps))
-        ss = points[:,2].reshape(nsamps, nsamps)
-        ax = fig.add_subplot(111, projection='polar')
-        ax.contourf(aa, ss, slc)
-    elif param == 'strength':
-        # Plot alpha and gamma, stereonet/ sterographic projection plot
-        # Remember that alpha == dip and gamma == strike
-        # To project dip onto polar plot using Lamber equal area:
-        # R = 2*cos(alpha/2)   
-        # alpha = 2*arccos(R/2)
-        gg = deg2rad(points[:,1].reshape(nsamps, nsamps))
-        a = points[:,0].reshape(nsamps, nsamps)
-        aa = (2*cos(deg2rad(a)/2))
-        ax = fig.add_subplot(111, projection='polar')
-        ax.contourf(gg, aa, slc)
+    fig = plt.figure(figsize= (16, 8))
         
-    else:
-        raise ValueError(f'{param} not recognised')
+    # Plot gamma v strength, polar plot (Alpha is fixed to mode value)
+    points, slc = Ensemble.slice_from_3d_pdf('alpha', model[0], nsamps)
+    gg = deg2rad(points[:,1].reshape(nsamps, nsamps))
+    ss = points[:,2].reshape(nsamps, nsamps)
+    ax1 = fig.add_subplot(131, projection='polar')
+    ax1.plot(deg2rad(model[1]), model[2], 'kx')
+    ax1.set_theta_zero_location('N')
+    ax1.set_theta_direction(-1)
+    C1 = ax1.contour(gg, ss, slc, levels=[0.5, 0.75, 0.8, 0.95])
+    ax1.clabel(C1, C1.levels, inline=True, fontsize=10)
+    ax1.set_title(f'Slice through alpha axis. alpha = {model[0]}')
 
-    return ax
+    # Plot alpha v strength, polar plot (Gamma is fixed)
+    points, slc = Ensemble.slice_from_3d_pdf('gamma', model[1], nsamps)
+    aa = deg2rad(points[:,0].reshape(nsamps, nsamps))
+    ss = points[:,2].reshape(nsamps, nsamps)
+    ax2 = fig.add_subplot(132, projection='polar')
+    C2 = ax2.contour(aa, ss, slc, levels=[0.5, 0.75, 0.8, 0.95])
+    ax2.clabel(C2, C2.levels, inline=True, fontsize=10)
+    ax2.plot(deg2rad(model[0]), model[2], 'kx')
+    ax2.set_theta_zero_location('N')
+    ax2.set_theta_direction(-1)
+    ax2.set_thetamin(0)
+    ax2.set_thetamax(90)
+    ax2.set_title(f'Slice through Gamma axis, gamma = {model[1]}')
+ 
+    # Plot alpha and gamma, stereonet/ sterographic projection plot
+    # Remember that alpha == dip and gamma == strike
+    # To project dip onto polar plot using Lamber equal area:
+    # R = 2*cos(alpha/2)   
+    # alpha = 2*arccos(R/2)
+    points, slc = Ensemble.slice_from_3d_pdf('strength', model[2], nsamps)
+    gg = deg2rad(points[:,1].reshape(nsamps, nsamps))
+    a = points[:,0].reshape(nsamps, nsamps)
+    aa = (2*cos(deg2rad(a)/2))
+    ax3 = fig.add_subplot(133, projection='polar')
+    C3 = ax3.contour(gg, aa, slc, levels=[0.5, 0.75, 0.8, 0.95])
+    ax3.clabel(C3, C3.levels, inline=True, fontsize=10)
+    ax3.plot(deg2rad(model[1]), (2*cos(deg2rad(model[0])/2)), 'kx')
 
+    ax3.set_theta_zero_location('N')
+    ax3.set_theta_direction(-1)
+    ax3.set_title(f'Slice through strength axis, s = {model[2]}')
+    
+    plt.savefig('2D_slices_through_model_max.png', dpi=500)
+    
 def plot_jelly_bowl(Ensemble):
     '''plot a spherical projection of PDF using strenght as radius and alpha, gamma as theta, phi'''
     
@@ -106,7 +132,7 @@ def ags_to_xyz(alpha, gamma, s):
        cartesian co-ordinates for plotting
     '''
     radius = s 
-    theta = deg2rad(alpha) 
+    theta = deg2rad(90 - alpha) 
     phi = deg2rad(gamma)
     
     x = radius * sin(theta) * cos(phi)
@@ -115,24 +141,53 @@ def ags_to_xyz(alpha, gamma, s):
     
     return x, y, z
 
-def slice_grid(Ensemble, nsamps, axis):
+    
+def isosurface_view(Ensemble, level, model):
     '''
-    slices 3D PDF from Ensemble alogn the desired axis, returning a 2D slice
     '''
+    # Normalise PDF to max likelihood
+    pdf = Ensemble.pdf_3d / Ensemble.pdf_3d.max()
+    a_spacing = Ensemble.alpha_samples[1] - Ensemble.alpha_samples[0]
+    g_spacing = Ensemble.gamma_samples[1] - Ensemble.gamma_samples[0]
+    s_spacing = Ensemble.strength_samples[1] - Ensemble.strength_samples[0]
+    space = (a_spacing, g_spacing, s_spacing)
+    verts, faces, normals, values = measure.marching_cubes(pdf, level, spacing=space)
+    verts[:,1] -= 180 # Map gamma verticies back to -180 - 180
+    xx, yy, zz = ags_to_xyz(verts[:,0], verts[:,1], verts[:,2])
+    sphe_verts = np.vstack((xx, yy, zz)).T
 
-def plot_2d_slice_through_str(Ensemble, s, nsamps):
-    '''
-    plot a 2-d slice throught the model ensemble with a fixed strength.
-    i.e plot likelihoods for alpha, gamma for a given stength param
-    '''
-    #
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    mesh = Poly3DCollection(sphe_verts[faces])
+    mesh.set_edgecolor('k')
+    ax.add_collection3d(mesh)
+    add_str_scale(ax)
+    xm, ym, zm = ags_to_xyz(model[0], model[1], model[2])
+    ax.plot([0, xm], [0, ym], [0, zm],'-')
+    ax.plot(xm, ym, zm, 'x')
+    # ax.scatter(xx, yy, zz, c=values)
+    ax.set_xlim([-0.02, 0.02])
+    ax.set_xlabel('X')
+    ax.set_ylim([-0.02, 0.02])
+    ax.set_ylabel('Y')
+    ax.set_zlim([0, 0.02])
+    plt.savefig(f'test_isosurface_view_level{level}.png', dpi=400)
 
-def plot_2d_slice_through_alpha(Ensemble, alpha, nsamps):
+def add_str_scale(ax):
+    '''draws circles on 3-D pyplto axis to show strength parameter (radius of PDF)
     '''
-    plot a 2-d slice through model PDF 
-    '''
-    alpha_samples = alpha.reshape(50,50,50)[:,0,0]
-    ax = plt.subplot(111, projection='polar')
+    t = np.linspace(0, 2*np.pi, 50)
+    strs = [0.005, 0.01, 0.015, 0.02] # strenght params to use
+    for s in strs:
+        x = s*np.cos(t)
+        y = s*np.sin(t)
+        z = np.zeros(50)
+        ax.plot(x, y, z,'r-')
+        ax.text(s*cos(np.pi/4), s*sin(np.pi/4),0, s=str(s))
+        
+    ax.plot([0, 0.02], [0, 0], [0, 0], 'k-')
+
 
 def plot_3d_isosurface(Ensemble):
     
@@ -189,10 +244,12 @@ if __name__ == '__main__':
         Ensemble = EnsembleVisualiser.Ensemble(
             '/Users/ja17375/SWSTomo/BlueCrystal/Dom1160/StackedCorrs/Alpha0_90/AddingDAN',
             read=False)
-        Ensemble.read_3d_pdf('/Users/ja17375/SWSTomo/BlueCrystal/Dom1160/StackedCorrs/Alpha0_90/AddingDAN/MTS_3D_pdf.npy')
+        Ensemble.read_3d_pdf('/Users/ja17375/SWSTomo/BlueCrystal/Dom1160/StackedCorrs/Alpha0_90/AddingDAN/D1160_doubleScS_pathlength_PDF.npy')
        # Ensemble.evaluate_3d_kde(nsamps=100j)
-        plot_3d_isosurface(Ensemble)
+        model = [5.1138, 139.5269, 0.0089]
+        isosurface_view(Ensemble, 0.5,model)
         #plot_jelly_bowl(Ensemble)
+        plt.show()
         
     elif mode =='2':
         Ensemble = EnsembleVisualiser.Ensemble(
