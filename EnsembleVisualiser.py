@@ -6,10 +6,10 @@ Created on Wed Nov 18 16:12:12 2020
 @author: ja17375
 """
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
 from scipy import stats
-from mayavi import mlab
+from scipy.interpolate import RegularGridInterpolator
+from skimage import measure
 
 class Ensemble:
     '''
@@ -18,28 +18,29 @@ class Ensemble:
      retooling - i.e figuring out what column is what as the output Ensembles 
      have no column headings)
     '''
-    def __init__(self, rundir):
+    def __init__(self, rundir, read=True, fname='MTS_ensemble.out'):
         '''
         Read raw ensemble and transform it back from the normalise parameter space
         '''
         self.model_config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
                              'gamma_max': 180, 'strength_min': 0, 'strength_max': 0.02}
-        
-        raw_ensemble = self.read_ensemble(rundir,'MTS_dev_ensemble.out')
-        
-        alpha = self.restore_params(raw_ensemble[:,0],
-                            self.model_config['alpha_min'], self.model_config['alpha_max'])
-        gamma = self.restore_params(raw_ensemble[:,1],
-                            self.model_config['gamma_min'], self.model_config['gamma_max'])
-        strength = self.restore_params(raw_ensemble[:,2],
-                            self.model_config['strength_min'], self.model_config['strength_max'])
-        
-        self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
-                                   'strength':strength, 'misfit': raw_ensemble[:,-1]})
+        self.rundir = rundir
+        if read:
+            raw_ensemble = self.read_ensemble(rundir,fname)
+            
+            alpha = self.restore_params(raw_ensemble[:,0],
+                                self.model_config['alpha_min'], self.model_config['alpha_max'])
+            gamma = self.restore_params(raw_ensemble[:,1],
+                                self.model_config['gamma_min'], self.model_config['gamma_max'])
+            strength = self.restore_params(raw_ensemble[:,2],
+                                self.model_config['strength_min'], self.model_config['strength_max'])
+            
+            self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                                       'strength':strength, 'misfit': raw_ensemble[:,-1]})
         # Store modes as a DataFrame for ease of reference. Misfit index as [:,-1] in order to
         # "future proof" as misfit is always last column of MTS_ensemble.out 
 
-    def read_ensemble(self, path, fname='MTS_ensemble.out'):
+    def read_ensemble(self, path, fname):
         '''function to read the MTS_emsemble from the input run directory'''
         raw_ensemble = np.loadtxt(f'{path}/{fname}')
         
@@ -53,98 +54,97 @@ class Ensemble:
         true_params = p_min + (p_range * param)
         
         return true_params
-    
-    def evaluate_2d_kde(Ensemble, params, nsamps=50j):
-    
-        x_param = params[0]
-        y_param = params[1]
-        xmin = Ensemble.model_config[f'{x_param}_min']
-        xmax = Ensemble.model_config[f'{x_param}_max']
-        ymin = Ensemble.model_config[f'{y_param}_min']
-        ymax = Ensemble.model_config[f'{y_param}_max']
-        
-        x_samp, y_samp = np.mgrid[xmin:xmax:nsamps, ymin:ymax:nsamps]
-        samps = np.vstack([x_samp.ravel(), y_samp.ravel()])
-        models = np.vstack([Ensemble.models[x_param].values, Ensemble.models[y_param].values])
-        # stack model points for alpha, gamma together into a 2d array for evalution in KDE
-        kernel = stats.gaussian_kde(models)
-        # do the gaussian KDE for our model values, now we need to evaluate PDF at sample points
-        pdf = np.reshape(kernel(samps).T, x_samp.shape)
-    return pdf 
 
-    def evaluate_3d_kde(Ensemble, nsamps=50j):
+    def evaluate_3d_kde(self, nsamps=50):
         ''' Function to make the full 3D PDF from model Ensemble. As we are using all 3 params
         (alpha, gamma, strength) we do not need to worry about handling different combos'''
-        a_samp, g_samp, s_samp = np.mgrid[
-            Ensemble.model_config['alpha_min'] : Ensemble.model_config['alpha_max'] : nsamps,
-            Ensemble.model_config['gamma_min'] : Ensemble.model_config['gamma_max'] : nsamps,
-            Ensemble.model_config['strength_min'] : Ensemble.model_config['strength_max'] : nsamps    
-            ]
+        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
+                                         self.model_config['alpha_max'],nsamps)
+        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
+                                         self.model_config['gamma_max'],nsamps)
+        self.strength_samples = np.linspace(self.model_config['strength_min'],
+                                            self.model_config['strength_max'],nsamps)
+        a_samp, g_samp, s_samp = np.meshgrid(
+                                    self.alpha_samples,
+                                    self.gamma_samples,
+                                    self.strength_samples)  
         samples = np.vstack([a_samp.ravel(), g_samp.ravel(), s_samp.ravel()])
-        models = np.vstack([Ensemble.models.alpha.values,
-                            Ensemble.models.gamma.values,
-                            Ensemble.models.strength.values
+        models = np.vstack([self.models.alpha.values,
+                            self.models.gamma.values,
+                            self.models.strength.values
                             ])
         kernel = stats.gaussian_kde(models)
-        self.pdf = np.reshape(kernel(samples), a_samp.shape)
-        self.samples = samples
+        self.pdf_3d = np.reshape(kernel(samples), (nsamps, nsamps, nsamps))
+
+    def slice_from_3d_pdf(self, axis, value, n, norm=True):
+        '''Interpolates 3D PDF along a fixed axis. 
+        I.e generates a 2D slice of the 3D volume '''        
+        if axis == 'alpha':
+            if (value >= self.model_config['gamma_min']) & (value <= self.model_config['gamma_max']):
+                g = np.linspace(self.model_config['gamma_min'],
+                                self.model_config['gamma_max'], n)
+                s = np.linspace(self.model_config['strength_min'],
+                                self.model_config['strength_max'], n)
+                gg, ss = np.meshgrid(g, s)
+                aa = np.ones(gg.shape) *value
+            else:
+                raise ValueError(f'Value {value} for alpha is outside limits')  
+                
+        elif axis == 'gamma':
+            if (value >= self.model_config['gamma_min']) & (value <= self.model_config['gamma_max']):
+                a = np.linspace(self.model_config['alpha_min'],
+                                self.model_config['alpha_max'], n)
+                s = np.linspace(self.model_config['strength_min'],
+                             self.model_config['strength_max'], n)
+                aa, ss = np.meshgrid(a, s)
+                gg = np.ones(aa.shape) * value
+            else:
+                raise ValueError(f'Value {value} for gamma is outside limits')   
+                                 
+        elif axis == 'strength':
+            if (value >= self.model_config['strength_min']) & (value <= self.model_config['strength_max']):
+                a = np.linspace(self.model_config['alpha_min'],
+                                self.model_config['alpha_max'], n)
+                g = np.linspace(self.model_config['gamma_min'],
+                                self.model_config['gamma_max'], n)
+                aa, gg = np.meshgrid(a, g)
+                ss = np.ones(aa.shape) * value
+            else:
+                raise ValueError(f'Value {value} for strength is outside limits')
+        else:    
+            raise ValueError(f'{axis} not recognised')
         
-def plot_ags_models(Ensemble):
-    '''
-    Simple 3-D plot of all models in Ensemble, assuming the 3 pametees alpha, gamma, strength
-    have been inverted for 
-    '''    
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    
-    C = ax.scatter(Ensemble.models.alpha, Ensemble.models.gamma, Ensemble.models.strength, marker='.',
-               c=Ensemble.models.misfit, cmap='viridis')
-    ax.set_xlim([Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max']])
-    ax.set_ylim([Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']])
-    ax.set_zlim([Ensemble.model_config['strength_min'], Ensemble.model_config['strength_max']])
-    plt.colorbar(C)
+        if norm:
+            pdf = self.pdf_3d / self.pdf_3d.max()
+        else:
+            pdf = self.pdf_3d
+        interp_function = RegularGridInterpolator((self.alpha_samples,
+                                                   self.gamma_samples,
+                                                   self.strength_samples),
+                                                  pdf)
+        points =  np.vstack((aa.flatten(), gg.flatten(), ss.flatten())).T # Stack samples points together. Taking transerve makes it a row 
+        slc = interp_function(points).reshape(n, n)   
+        return points, slc
 
+    def read_3d_pdf(self, fileID):
+        ''' Reads existing 3D PDF '''
+        self.pdf_3d = np.load(fileID)
+        # check pdf is evenly sampled
+        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[1]
+        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[2]
+        self.nsamps = self.pdf_3d.shape[0]
+        # Now we know sampling is even, generate sample values
+        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
+                                         self.model_config['alpha_max'],self.nsamps)
+        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
+                                         self.model_config['gamma_max'],self.nsamps)
+        self.strength_samples = np.linspace(self.model_config['strength_min'],
+                                            self.model_config['strength_max'],self.nsamps)
 
-    
-def plot_alpha_gamma_pdf(Ensemble, pdf):
-    '''Plots 2D pdf for the parameters  alpha, gamma from model ensemble'''
-    # sample PDF at sample points, reshape to fit grid, take transeverse or array so its the right way round
-    fig, ax = plt.subplots()
-    C =  ax.contourf(pdf, cmap=plt.cm.gist_earth_r,
-              extent=[Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max'],
-                      Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']],
-                      )
-    plt.colorbar(C)
-#    ax.plot(Ensemble.models.alpha, Ensemble.models.gamma, '.')
-    
-def plot_3d_pdf(Ensemble):
-    
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    alpha = Ensemble.samples[0,:]
-    gamam = Ensemble.samples[1,:]
-    strength = Ensemble.sample[2,:]
-    ax.scatter(a_samp, g_samp, s_samp, c=pdf)
-
-def plot_3d_isosurface(Ensemble, pdf, nsamps):
-    
-    a_samp, g_samp, s_samp = np.mgrid[
-    Ensemble.model_config['alpha_min'] : Ensemble.model_config['alpha_max'] : nsamps,
-    Ensemble.model_config['gamma_min'] : Ensemble.model_config['gamma_max'] : nsamps,
-    Ensemble.model_config['strength_min'] : Ensemble.model_config['strength_max'] : nsamps    
-    ]
-    mlab.contour3d(a_samp, g_samp, s_samp, pdf, opacity=0.5)
-    mlab.axes()
-    mlab.show()
-    
-def plot_pdf_slice():
-    '''plot a 2d slice through a 3d PDF'''
-    pass
-
-def plot_jelly_bowl():
-    '''plot a spherical projection of PDF using strenght as radius and alpha, gamma as theta, phi'''
-    pass
-    
+        
+    def save_3d_pdf(self, outfile):
+        ''' Saves 3-D PDF as Numpy Array'''
+        np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
     
     
     
