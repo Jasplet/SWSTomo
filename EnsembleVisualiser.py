@@ -8,8 +8,7 @@ Created on Wed Nov 18 16:12:12 2020
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.interpolate import RegularGridInterpolator
-from skimage import measure
+from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
 
 class Ensemble:
     '''
@@ -76,9 +75,73 @@ class Ensemble:
         kernel = stats.gaussian_kde(models)
         self.pdf_3d = np.reshape(kernel(samples), (nsamps, nsamps, nsamps))
 
-    def slice_from_3d_pdf(self, axis, value, n, norm=True):
-        '''Interpolates 3D PDF along a fixed axis. 
-        I.e generates a 2D slice of the 3D volume '''        
+    def find_most_likely(self, ret=False):
+        '''
+        finds the most likely (i.e. maximum) value in model ensemble. 
+        this method requires that the object has self.pdf_3d (either read in or generated) 
+        '''
+
+        idxmax = self.pdf_3d.argmax()
+        # Translate single index to the indicies of the 3D array
+        ags = np.unravel_index(idxmax, self.pdf_3d.shape)
+        # Make an array holding the most likely model
+        self.most_likely_model = [self.alpha_samples[ags[0]],
+                                  self.gamma_samples[ags[1]],
+                                  self.strength_samples[ags[2]]
+                                  ]
+        if ret:    
+            return self.most_likely_model
+        elif not ret:
+            print('The most likely model for the given Model Ensemble is:')
+            print(f'Alpha = {self.most_likely_model[0]:.3f}')
+            print(f'Gamma = {self.most_likely_model[1]:.3f}')
+            print(f'Strength = {self.most_likely_model[2]:.3f}')
+ 
+    def find_best_fitting(self, ret=False):
+        '''
+        Finds the best fitting model from the model ensemble 
+        '''
+        imin = self.models.misfit.idxmin()
+        self.best_fitting_model = self.models.iloc[imin]
+        if ret:
+            return self.best_fitting_model
+        elif not ret:
+            print('The best fitting model is:')
+            print(f'Alpha = {self.best_fitting_model[0]:.3f}')
+            print(f'Gamma = {self.best_fitting_model[1]:.3f}')
+            print(f'Strength = {self.best_fitting_model[2]:.3f}')
+            print(f'Model misfit = {self.best_fitting_model[3]:.3f}')
+    
+    def slice_3d_volume(self, axis, value, n, method):
+        '''
+        Interpolates 3D models along a give axis to return a regularaly sampled 2-D slice
+        This can be done to interpolate either model misfit or the 3D PDF (if the PDF has been generated)
+        
+        '''        
+        if method == 'pdf':
+            pdf = self.pdf_3d / self.pdf_3d.max()
+            interp_function = RegularGridInterpolator((self.alpha_samples,
+                                                   self.gamma_samples,
+                                                   self.strength_samples),
+                                                      pdf)
+        elif method == 'misfit':
+            misfit = self.models.misfit
+            models = np.vstack([self.models.alpha,
+                               self.models.gamma,
+                               self.models.strength]).T
+            interp_function = LinearNDInterpolator(models, misfit)
+        
+        aa, gg, ss = self.gen_2d_param_grid(axis, value, n)
+        points =  np.vstack((aa.flatten(), gg.flatten(), ss.flatten())).T # Stack samples points together. Taking transerve makes it a row 
+        slc = interp_function(points).reshape(n, n)   
+        return points, slc
+
+    def gen_2d_param_grid(self, axis, value, n):
+        '''
+        Function that makes regular grids of models parameters for where one parameter (or axis) of the model 
+        is fixed.
+        This is to facilitate the interpolation of 2-D slices through a 3-D volume
+        '''
         if axis == 'alpha':
             if (value >= self.model_config['gamma_min']) & (value <= self.model_config['gamma_max']):
                 g = np.linspace(self.model_config['gamma_min'],
@@ -113,19 +176,9 @@ class Ensemble:
                 raise ValueError(f'Value {value} for strength is outside limits')
         else:    
             raise ValueError(f'{axis} not recognised')
-        
-        if norm:
-            pdf = self.pdf_3d / self.pdf_3d.max()
-        else:
-            pdf = self.pdf_3d
-        interp_function = RegularGridInterpolator((self.alpha_samples,
-                                                   self.gamma_samples,
-                                                   self.strength_samples),
-                                                  pdf)
-        points =  np.vstack((aa.flatten(), gg.flatten(), ss.flatten())).T # Stack samples points together. Taking transerve makes it a row 
-        slc = interp_function(points).reshape(n, n)   
-        return points, slc
 
+        return aa, gg, ss
+    
     def read_3d_pdf(self, fileID):
         ''' Reads existing 3D PDF '''
         self.pdf_3d = np.load(fileID)
@@ -145,7 +198,5 @@ class Ensemble:
     def save_3d_pdf(self, outfile):
         ''' Saves 3-D PDF as Numpy Array'''
         np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
-    
-    
     
     
