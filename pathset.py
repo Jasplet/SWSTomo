@@ -762,7 +762,7 @@ def find_phases_in_domain(phasefile,dom_ID,layer='Lower',crit=5.0,save=False):
     '''
     date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
     df = pd.read_csv(phasefile,converters=date_time_convert,delim_whitespace=True)
-    domains = np.loadtxt('T3_global.bins',skiprows=1)
+    domains = np.loadtxt('/Users/ja17375/SWSTomo/Inversions/T3_global.bins',skiprows=1)
 #     dom = domains[domains[:,0] == dom_ID]
     dom = domains[np.isin(domains[:,0],dom_ID)]
     dlat = dom[0,1]
@@ -779,7 +779,7 @@ def find_phases_in_domain(phasefile,dom_ID,layer='Lower',crit=5.0,save=False):
         dist = vincenty_dist(dlat, dlon, plat, plon)[0]
         
         if dist <= crit:
-            print(phase.STAT, phase.PHASE, dist)
+            #print(phase.STAT, phase.PHASE, dist)
             #Is the phase within a fixed distance from domain center
             idx.append(i)
     df_out = df.iloc[idx]
