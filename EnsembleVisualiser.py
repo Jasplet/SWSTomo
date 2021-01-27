@@ -33,9 +33,12 @@ class Ensemble:
                                 self.model_config['gamma_min'], self.model_config['gamma_max'])
             strength = self.restore_params(raw_ensemble[:,2],
                                 self.model_config['strength_min'], self.model_config['strength_max'])
-            
+            # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
+            # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
+            # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
+            misfit = 1 / raw_ensemble[:, -1]
             self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
-                                       'strength':strength, 'misfit': raw_ensemble[:,-1]})
+                                       'strength':strength, 'misfit': misfit})
         # Store modes as a DataFrame for ease of reference. Misfit index as [:,-1] in order to
         # "future proof" as misfit is always last column of MTS_ensemble.out 
 
