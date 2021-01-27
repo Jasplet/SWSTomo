@@ -303,7 +303,7 @@ def plot_3d_model_misfit(Ensemble, n):
     '''
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
-    models_sort = Ensemble.models.sort_values(by=['misfit'],ascending=True)
+    models_sort = Ensemble.models.sort_values(by=['misfit'])
     pmodels = models_sort.iloc[0:n]
     C = ax.scatter(pmodels.alpha, pmodels.gamma, pmodels.strength, c=pmodels.misfit,s=6)
     ax.set_xlabel(r'$\alpha \degree $')
