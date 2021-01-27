@@ -8,7 +8,6 @@ import Windower
 from obspy.taup import TauPyModel as TauP
 import os
 from glob import glob
-import subprocess
 
 def preproc_sac(st_in,c1 = 0.01, c2 = 0.5):
     '''
