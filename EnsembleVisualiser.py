@@ -17,7 +17,7 @@ class Ensemble:
      retooling - i.e figuring out what column is what as the output Ensembles 
      have no column headings)
     '''
-    def __init__(self, rundir, read=True, fname='MTS_ensemble.out'):
+    def __init__(self, rundir, read=True, dims='ags',fname='MTS_ensemble.out'):
         '''
         Read raw ensemble and transform it back from the normalise parameter space
         '''
@@ -26,19 +26,44 @@ class Ensemble:
         self.rundir = rundir
         if read:
             raw_ensemble = self.read_ensemble(rundir,fname)
-            
-            alpha = self.restore_params(raw_ensemble[:,0],
-                                self.model_config['alpha_min'], self.model_config['alpha_max'])
-            gamma = self.restore_params(raw_ensemble[:,1],
-                                self.model_config['gamma_min'], self.model_config['gamma_max'])
-            strength = self.restore_params(raw_ensemble[:,2],
-                                self.model_config['strength_min'], self.model_config['strength_max'])
-            # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
-            # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
-            # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
-            misfit = 1 / raw_ensemble[:, -1]
-            self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
-                                       'strength':strength, 'misfit': misfit})
+            if dims == 'ags':
+                alpha = self.restore_params(raw_ensemble[:,0],
+                                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                gamma = self.restore_params(raw_ensemble[:,1],
+                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                strength = self.restore_params(raw_ensemble[:,2],
+                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
+                # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
+                # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
+                misfit = 1 / raw_ensemble[:, -1]
+                self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                                           'strength':strength, 'misfit': misfit})
+            elif dims == 'ag':
+                #2-D alpha and gamma only
+                alpha = self.restore_params(raw_ensemble[:,0],
+                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                gamma = self.restore_params(raw_ensemble[:,1],
+                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                misfit = 1 / raw_ensemble[:, -1]
+                self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                                            'misfit': misfit})
+            elif dims == 'as':
+                alpha = self.restore_params(raw_ensemble[:,0],
+                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                strength = self.restore_params(raw_ensemble[:,1],
+                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                misfit = 1 / raw_ensemble[:, -1]
+                self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                                           'misfit': misfit})
+            elif dims == 'gs':
+                gamma = self.restore_params(raw_ensemble[:,0],
+                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                strength = self.restore_params(raw_ensemble[:,1],
+                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                misfit = 1 / raw_ensemble[:, -1]
+                self.models = pd.DataFrame({'gamma': gamma,
+                                           'strength':strength, 'misfit': misfit})
         # Store modes as a DataFrame for ease of reference. Misfit index as [:,-1] in order to
         # "future proof" as misfit is always last column of MTS_ensemble.out 
 
