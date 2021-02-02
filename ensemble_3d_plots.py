@@ -373,7 +373,7 @@ def plot_2d_views_nbest_model(models, n):
     ax3.set_xlabel('Alpha ($\degree$)')
     ax3.set_ylabel('Gamma ($\degree$)')
     cbar = fig.colorbar(C)
-    cbar.ax.set_ylabel(r'$\Sigma{\lambda_2]$')
+    cbar.ax.set_ylabel(r'$\Sigma (\lambda_2)$')
     return fig
 
 def plot_3d_best_misfit(Ensemble, mf):
