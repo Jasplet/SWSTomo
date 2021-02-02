@@ -54,7 +54,7 @@ class Ensemble:
                 strength = self.restore_params(raw_ensemble[:,1],
                                     self.model_config['strength_min'], self.model_config['strength_max'])
                 misfit = 1 / raw_ensemble[:, -1]
-                self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                self.models = pd.DataFrame({'alpha': alpha, 'strength': strength,
                                            'misfit': misfit})
             elif dims == 'gs':
                 gamma = self.restore_params(raw_ensemble[:,0],
