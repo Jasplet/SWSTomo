@@ -16,6 +16,7 @@ from matplotlib.gridspec import GridSpec
 import splitwavepy as sw
 import pandas as pd
 import numpy as np
+from correct_waveforms import event_relative_time
 
 DATA_DIR = '/Users/ja17375/SWSTomo/data'
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
@@ -42,18 +43,6 @@ def add_waveforms(pair, ert, ax):
     ax.plot(time, r, "-", label='BHN')
     ax.plot(time, t, "-", label='BHE')
 
-    
-def add_windows(metadata, axs, yrange):
-    '''adds analysis window ranges to ax'''
-    windows = [metadata.sac['user0'], metadata.sac['user1'], 
-               metadata.sac['user2'], metadata.sac['user3']
-               ]
-    for ax in axs:
-        ax.vlines(windows, ymin = yrange[0], ymax=yrange[1], colors='black', linestyle='solid') 
-        ax.set_xlim([windows[0]-5, windows[3]+5])
-
-
-
 def set_yrange(ydata, axs):
     ymin = rounddown(ydata.min())
     ymax = roundup(ydata.max())
@@ -62,7 +51,6 @@ def set_yrange(ydata, axs):
     for ax in axs:
         ax.set_ylim(yrange)
     
-
     return yrange
 
 def roundup(x):
@@ -72,29 +60,34 @@ def rounddown(x):
     return np.floor(x /100) * 100
 
 if __name__ == '__main__':
-    
-    paths = ['HUMO_2008321_170232_SKS',
-         'COR_2008321_170232_SKS',
-         '116A_2006360_122621_SKKS',
-         'K20A_2009003_223342_SKKS',
-         'L24A_2009003_194355_SKKS',
-         'DAN_2003174_121231_ScS',
-         'RDM_2003174_121231_ScS']
+
+    paths = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/Joint7Phases.sdb', delim_whitespace=True) 
     n = len(paths)
-    fig = plt.figure(figsize=(14, 18))
-    gs = GridSpec(n, 2, figure=fig)
-    for i, path in enumerate(paths):
-        corr = corrs[corrs.STAT == path.split('_')[0]]
-        pair, metadata = read_path(path)
-        ert = event_relative_time(metadata)
-        ax_in = fig.add_subplot(gs[i, 0])
-        ax_out = fig.add_subplot(gs[i,1])
-        add_waveforms(pair, ert, ax_in)
-        if i == 0:
-            ax_in.legend(['BHN', 'BHE'])
-        # pairc = remove_splitting(pair, corr)
-        # add_waveforms(pairc, ert, ax_out)
-        yrange = set_yrange(pair.data(), (ax_in, ax_out))
-        add_windows(metadata, (ax_in,ax_out), yrange)
+    pathc = '/Users/ja17375/SWSTomo/Inversions/Dom1160/Joint7Phase/CorrectedPhases'
     
+    fig = plt.figure(figsize=(20, 25))
+    gs = GridSpec(n, 4, figure=fig, width_ratios=[3,1,3,1])
+    for i, path in paths.iterrows():
+        filename = f'{path.STAT}_{path.DATE}_{path.TIME}*_{path.PHASE}'
+        file_corr = f'{path.STAT}_{path.PHASE}_corrected.pair'
+        pair, metadata = read_path_as_pair(filename)
+        station = metadata.station
+        pairc = sw.load(f'{pathc}/{file_corr}')
+        ert = event_relative_time(metadata)
+        pair.set_window(path.WBEG - ert, path.WEND - ert)
+                   
+        ax_in_tr = fig.add_subplot(gs[i, 0])
+        ax_in_pm = fig.add_subplot(gs[i, 1])
+        ax_out_tr = fig.add_subplot(gs[i, 2])
+        ax_out_pm = fig.add_subplot(gs[i, 3])
+        pair._ptr(ax_in_tr)
+        pair._ppm(ax_in_pm)
+        pairc._ptr(ax_out_tr)
+        pairc._ppm(ax_out_pm)
+        ax_in_tr.text(0.075, 0.9, f'{station} ({path.PHASE})', transform=ax_in_tr.transAxes, fontsize=14)
+        if i == 0:
+            ax_in_tr.set_title('Uncorrected Traces', fontsize=16)
+            ax_out_tr.set_title('Corrected Traces', fontsize=16)
+        
+    plt.tight_layout()
     plt.savefig(f'{FIG_DIR}/path_data_test.png')
