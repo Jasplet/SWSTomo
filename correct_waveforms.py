@@ -10,19 +10,20 @@ from obspy import UTCDateTime
 import splitwavepy as sw
 import numpy as np
 import pandas as pd
+import pickle
 DATA_DIR = '/Users/ja17375/SWSTomo/data'
 
 class Corrector:
     '''Corrects expected splitting for a single shear-wave'''
-    def __init__(self, path, corrections, phase):
+    def __init__(self, path, corrections, phase, window):
         
         self.pair, self.metadata = read_path_as_pair(path)
         self.phase = phase #S-wave phase type, informs corrections to be made
         self.corrections = corrections
         self.correction_applied = False
-        self.initial_splitting = self.measure_splitting()
-        window = self.retrieve_window()
-        self.pair.set_window(window[0], window[1])
+        self.window = window - event_relative_time(self.metadata)
+        self.pair.set_window(self.window[0], self.window[1])
+        print(f'Apply corrections to event {path}')
 
     def apply_corrections(self):
         '''Splitting Corrections are applied in reverse propagation order (reciver, Lowermost mantle, Source) '''
@@ -35,12 +36,6 @@ class Corrector:
             self.pair.unsplit(self.corrections['s_fast'], self.corrections['s_lag'])
         self.correction_applied = True
         
-    def retrieve_window(self):
-        rel_time_corr = event_relative_time(self.metadata)
-        wind_start = self.metadata.sac['user0'] - rel_time_corr
-        wind_end = self.metadata.sac['user3'] - rel_time_corr     
-        return (wind_start, wind_end)
-        
     def measure_splitting(self):
         '''Measure splitting of data (using splitwavepy's implementation of eigenvalue minimisation)
     
@@ -48,21 +43,25 @@ class Corrector:
         eigm = sw.EigenM(self.pair, lags=(4.,))
         
         lam2_norm = (eigm.lam2 / eigm.lam1).min()
-        print('Meausured splitting is')
-        print(f'fast = {eigm.fast} +/- {eigm.dfast}')
-        print(f'dt = {eigm.lag} +/- {eigm.dlag}')
-        print(f' lam2/lam1 = {lam2_norm:4.3f}')
         if self.correction_applied is True:
+            print('Meausured residual (post-corr) splitting is')
             self.residual_eigm = eigm
             self.residual_lam2norm = lam2_norm
         else:
+            print('Measured apparent (pre-corr) splitting is')
             self.apparent_eigm = eigm
             self.lam2norm = lam2_norm
+        
+        print(f'fast = {eigm.fast} +/- {eigm.dfast}')
+        print(f'dt = {eigm.lag} +/- {eigm.dlag}')
+        print(f' lam2/lam1 = {lam2_norm:4.3f}')
+        eigm = 0 
     
     def save_correction(self, filename):
         if self.correction_applied is True:
-            self.pair.save(f'/Users/ja17375/SWSTomo/Inversions/Dom1160/Joint7Phase/CorrectedPhases{filename}')
-    
+            outfile = f'/Users/ja17375/SWSTomo/Inversions/Dom1160/Joint7Phase/CorrectedPhases/{filename}'
+            with open(outfile, 'wb') as f:
+                pickle.dump(self.pair,f)    
 def read_path_as_pair(fstem):
     ''' 
     Reads the 3-component waveform (SAC) data 
@@ -88,20 +87,26 @@ def event_relative_time(st_stats):
     rel_start = startdate - eventtime
     return rel_start
 
+def save_pair(Pair, filename):
+    '''
+    Dumps pair to pickle object. Borrowed from SplitWavePy as pip install version appears to have it missing
+    '''
+
+
 if __name__ == '__main__':
-    paths = ['HUMO_2008321_170232_SKS']
-      # 'COR_2008321_170232_SKS',
-      # '116A_2006360_122621_SKKS',
-      # 'K20A_2009003_223342_SKKS',
-      # 'L24A_2009003_194355_SKKS',
-      # 'DAN_2003174_121231_ScS',
-      # 'RDM_2003174_121231_ScS']
-    
+   
+    paths = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/Joint7Phases.sdb', delim_whitespace=True) 
     corrs = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/Dom1160/Predicted_Splitting.txt',
                         delim_whitespace=True)
-    for i, path in enumerate(paths):
-        icorr = corrs[corrs.STAT == path.split('_')[0]]
-        phase = path.split('_')[-1]
+
+        
+    misfit = 0 
+    for i, path in paths.iterrows():
+        filename = f'{path.STAT}_{path.DATE}_{path.TIME}*_{path.PHASE}'
+        outfile = f'{path.STAT}_{path.PHASE}_corrected.pair'
+        icorr = corrs[corrs.STAT == path.STAT]
+        phase = path.PHASE
+        window = np.array([path.WBEG, path.WEND])
         if phase == 'ScS':
             corr = {'r_fast':icorr.FAST_R.values[0], 'r_lag': icorr.TLAG_R.values[0],
                     'd_fast':icorr.FAST_D.values[0], 'd_lag': icorr.TLAG_D.values[0],
@@ -109,9 +114,10 @@ if __name__ == '__main__':
         else:
             corr = {'r_fast':icorr.FAST_R.values[0], 'r_lag': icorr.TLAG_R.values[0],
                     'd_fast':icorr.FAST_D.values[0], 'd_lag': icorr.TLAG_D.values[0]}
-        C = Corrector(path, corr, phase)
+        C = Corrector(filename, corr, phase, window)
         C.apply_corrections()
         C.measure_splitting()
-        C.apparent_eigm.plot()
-        C.residual_eigm.plot()
-        
+        C.save_correction(outfile)
+        misfit += C.residual_lam2norm
+
+    print(f'Misfit (sum(lam2) is {misfit}')
