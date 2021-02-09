@@ -14,6 +14,7 @@ import cartopy.feature as cfeature
 import cartopy.crs as ccrs
 from plot_models import draw_trigonal_doms
 from pathset import find_phases_in_domain
+from sphe_trig import vincenty_dist
 
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
 
@@ -116,19 +117,13 @@ def map_single_domain_phases(phasefile,dom_ID,stations,extent=[110,260,-10,65]):
     #plt.savefig(f'{FIG_DIR}/Phases_in_D{dom_ID}.png',format='png',dpi=400,
                 # bbox_inches='tight')
                 
-def map_data(stations, region=[110,265,-10,55], add_tomo=False,
-                   file='LDom_1160_phases_SNR10_goodQ.sdb',fname=None):
+def map_data_tomo(stats, region=[110,265,-10,55], draw_paths=False, fname=None):
 
-    d1160_vlat = [51.5789, 49.2829, 43.4879, 51.5789]   
-    d1160_vlon = [-146.1495 , -134.1014, -144.1097, -146.1495]
-    phasefile = f'/Users/ja17375/SWSTomo/Inversions/{file}'
-    date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
-    data = pd.read_csv(phasefile,converters=date_time_convert,delim_whitespace=True)
-    if stations == 'all':
-        stats = data
-    elif stations == 'data-used':
-        s = ['DAN', 'RDM', 'C10A', 'HUMO', 'L24A', '116A', 'COR']
-        stats = data[data.STAT.isin(s)]
+    # if stations == 'all':
+    #     stats = data
+    # elif stations == 'data-used':
+    #     s = ['DAN', 'RDM', 'C10A', 'HUMO', 'L24A', '116A', 'COR']
+    #     stats = data[data.STAT.isin(s)]
     scs = stats[stats.PHASE == 'ScS']
     sks = stats[stats.PHASE == 'SKS']
     skks = stats[stats.PHASE == 'SKKS']
@@ -136,22 +131,26 @@ def map_data(stations, region=[110,265,-10,55], add_tomo=False,
     fig = pygmt.Figure()
     fig.basemap(region=region, projection='M9i', frame='a10')
 
-    if add_tomo:
-        cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
-        s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
-        fig.grdimage(grid=s40rts, cmap=cpt)
-        fig.colorbar(cmap=cpt,
-                     position='jBC+o0c/-1.5c/+w8c/0.5c+h+e+m',
-                     frame=['a1f0.5g0.25','x+l"dVs (%)"'])
+    cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
+    s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
+    fig.grdimage(grid=s40rts, cmap=cpt)
+    fig.colorbar(cmap=cpt,
+                position='jBC+o0c/-1.5c/+w8c/0.5c+h+e+m',
+                frame=['a1f0.5g0.25','x+l"dVs (%)"'])
     fig.coast(shorelines='1/0.5p,black', resolution='l')        
     # fig.plot(x=d1160_vlon,y=d1160_vlat,pen='2p,gray30,dashed')
-    for i, stat in stats.iterrows():
-        fig.plot(x=[stat.EVLO, stat.STLO], y=[stat.EVLA, stat.STLA],pen='1p,black')
-    fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.3c', color='cyan', pen='1p,black')
+    if draw_paths:
+        for i, stat in stats.iterrows():
+            fig.plot(x=[stat.EVLO, stat.STLO], y=[stat.EVLA, stat.STLA],pen='1p,black')
+    else:
+        print('Not adding paths')
+    fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.3c', color='darkred', pen='1p,black')
     fig.plot(x=sks.LOWMM_LON, y=sks.LOWMM_LAT, style='c0.3c', color='green', pen='1p,black')
     fig.plot(x=skks.LOWMM_LON, y=skks.LOWMM_LAT, style='c0.3c', color='orange', pen='1p,black')
-    fig.plot(x=stats.EVLO, y=stats.EVLA, style='a0.4c', color='black', pen ='black')
-    fig.plot(x=stats.STLO,y=stats.STLA, style='i0.5c', color='red', pen='1p,black')
+    fig.plot(x=stats.EVLO, y=stats.EVLA, style='a0.3c', color='black', pen ='black')
+    fig.plot(x=stats.STLO,y=stats.STLA, style='i0.4c', color='red', pen='1p,black')
+    
+    fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
     if fname:
         fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
     else:
@@ -178,3 +177,25 @@ def map_s40rts(region=[-170,-100,10,60]):
         y=d1160_vlat,
         pen='2p,gray30,dashed')
     fig.show(method='external')
+    
+if __name__ == '__main__':
+    phasefile = 'E_pacific_all_phases.sdb'
+    date_time_conv = {'TIME': lambda x: str(x),
+                      'DATE': lambda x: str(x)}
+    filepath = f'/Users/ja17375/SWSTomo/Inversions/{phasefile}'
+    data = pd.read_csv(filepath, converters=date_time_conv, delim_whitespace=True)
+    clat = 46
+    clon = -140.
+    crit = 4.
+    idx = []
+    for i, row in data.iterrows():
+        if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
+            idx.append(i)
+    data2plot = data.iloc[idx]
+    data2plot = data2plot[data2plot.SNR >= 10.]
+    data2plot = data2plot[(data2plot.Q >= 0.7) | (data2plot.Q <= -0.9)]
+    print(data2plot)
+                          
+    map_data(data2plot, add_tomo=True, draw_paths=False, region=[-170,-100,10,60])
+    data2plot.to_csv('/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb', index=False, sep=' ')
+    
