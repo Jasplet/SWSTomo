@@ -18,7 +18,7 @@ import pandas as pd
 import numpy as np
 from correct_waveforms import event_relative_time
 
-DATA_DIR = '/Users/ja17375/SWSTomo/data'
+DATA_DIR = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_model/wavecorr/corrs'
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
 
 def read_path_as_pair(fstem):
@@ -61,33 +61,25 @@ def rounddown(x):
 
 if __name__ == '__main__':
 
-    paths = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/Joint7Phases.sdb', delim_whitespace=True) 
-    n = len(paths)
-    pathc = '/Users/ja17375/SWSTomo/Inversions/Dom1160/Joint7Phase/CorrectedPhases'
+    paths = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb', delim_whitespace=True) 
+    n = len(paths) 
+    fig, axes = plt.subplots(nrows=n, ncols=2,
+                               gridspec_kw={'width_ratios': [3, 1]},
+                               figsize=(10, 20), constrained_layout=True)
     
-    fig = plt.figure(figsize=(20, 25))
-    gs = GridSpec(n, 4, figure=fig, width_ratios=[3,1,3,1])
     for i, path in paths.iterrows():
-        filename = f'{path.STAT}_{path.DATE}_{path.TIME}*_{path.PHASE}'
-        file_corr = f'{path.STAT}_{path.PHASE}_corrected.pair'
+        #filename = f'{path.STAT}_{path.DATE}_*_{path.PHASE}'
+        filename = f'{path.STAT}_{path.DATE}_*corr.00000002'
         pair, metadata = read_path_as_pair(filename)
         station = metadata.station
-        pairc = sw.load(f'{pathc}/{file_corr}')
         ert = event_relative_time(metadata)
         pair.set_window(path.WBEG - ert, path.WEND - ert)
-                   
-        ax_in_tr = fig.add_subplot(gs[i, 0])
-        ax_in_pm = fig.add_subplot(gs[i, 1])
-        ax_out_tr = fig.add_subplot(gs[i, 2])
-        ax_out_pm = fig.add_subplot(gs[i, 3])
+        ax_in_tr = axes[i, 0]
+        ax_in_pm = axes[i, 1]
         pair._ptr(ax_in_tr)
         pair._ppm(ax_in_pm)
-        pairc._ptr(ax_out_tr)
-        pairc._ppm(ax_out_pm)
-        ax_in_tr.text(0.075, 0.9, f'{station} ({path.PHASE})', transform=ax_in_tr.transAxes, fontsize=14)
-        if i == 0:
-            ax_in_tr.set_title('Uncorrected Traces', fontsize=16)
-            ax_out_tr.set_title('Corrected Traces', fontsize=16)
-        
-    plt.tight_layout()
-    plt.savefig(f'{FIG_DIR}/path_data_test.png')
+        ax_in_tr.set_title(f'Station {path.STAT}, {path.PHASE} recorded {path.DATE} {path.TIME} ')
+        ax_in_tr.set_xlim([25, 100])
+    
+    print(ert)
+    fig.savefig(f'{FIG_DIR}/ppv_corrected_waveforms.png')
