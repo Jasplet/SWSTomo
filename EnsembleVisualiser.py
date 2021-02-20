@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+from l2stats import ftest
 
 class Ensemble:
     '''
@@ -22,7 +23,7 @@ class Ensemble:
         Read raw ensemble and transform it back from the normalise parameter space
         '''
         self.model_config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
-                             'gamma_max': 180, 'strength_min': 0, 'strength_max': 0.02}
+                             'gamma_max': 180, 'strength_min': 0, 'strength_max': 0.04}
         self.rundir = rundir
         if read:
             raw_ensemble = self.read_ensemble(rundir,fname)
@@ -82,6 +83,19 @@ class Ensemble:
         
         return true_params
 
+    def find_fcrit(self, ndf):
+        '''Find the f-test 95% confidence value  
+        
+        Args:
+            ndf (int) - degrees of freedom of input data (ndf is calculated by sheba for each path in advance)
+        '''
+#       number of model dims is 1 less than cols of ensemble 
+        k = self.models.shape[1] - 1 
+        best = self.find_best_fitting(ret=True)
+        # last col of model is always misfit
+        self.fcrit = ftest(best[-1], ndf,k)
+        
+        
     def evaluate_3d_kde(self, nsamps=50):
         ''' Function to make the full 3D PDF from model Ensemble. As we are using all 3 params
         (alpha, gamma, strength) we do not need to worry about handling different combos'''
@@ -135,10 +149,10 @@ class Ensemble:
             return self.best_fitting_model
         elif not ret:
             print('The best fitting model is:')
-            print(f'Alpha = {self.best_fitting_model[0]:.3f}')
-            print(f'Gamma = {self.best_fitting_model[1]:.3f}')
-            print(f'Strength = {self.best_fitting_model[2]:.3f}')
-            print(f'Model misfit = {self.best_fitting_model[3]:.3f}')
+            print(f'Alpha = {self.best_fitting_model[0]:.5f}')
+            print(f'Gamma = {self.best_fitting_model[1]:.5f}')
+            print(f'Strength = {self.best_fitting_model[2]:.5f}')
+            print(f'Model misfit = {self.best_fitting_model[3]:.5f}')
     
     def slice_3d_volume(self, axis, value, n, method):
         '''
