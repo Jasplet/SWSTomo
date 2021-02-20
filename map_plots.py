@@ -117,19 +117,15 @@ def map_single_domain_phases(phasefile,dom_ID,stations,extent=[110,260,-10,65]):
     #plt.savefig(f'{FIG_DIR}/Phases_in_D{dom_ID}.png',format='png',dpi=400,
                 # bbox_inches='tight')
                 
-def map_data_tomo(stats, region=[110,265,-10,55], draw_paths=False, fname=None):
+def map_data_tomo(data, region, draw_paths=False, fname=None):
 
-    # if stations == 'all':
-    #     stats = data
-    # elif stations == 'data-used':
-    #     s = ['DAN', 'RDM', 'C10A', 'HUMO', 'L24A', '116A', 'COR']
-    #     stats = data[data.STAT.isin(s)]
-    scs = stats[stats.PHASE == 'ScS']
-    sks = stats[stats.PHASE == 'SKS']
-    skks = stats[stats.PHASE == 'SKKS']
+    hqdata = data[(data.SNR >= 10.) & ((data.Q >= 0.7) | (data.Q <= -0.9))]
+    scs = hqdata[hqdata.PHASE == 'ScS']
+    sks = hqdata[hqdata.PHASE == 'SKS']
+    skks = hqdata[hqdata.PHASE == 'SKKS']
     
     fig = pygmt.Figure()
-    fig.basemap(region=region, projection='M9i', frame='a10')
+    fig.basemap(region=region, projection='M15c', frame='a5')
 
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
     s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
@@ -140,23 +136,64 @@ def map_data_tomo(stats, region=[110,265,-10,55], draw_paths=False, fname=None):
     fig.coast(shorelines='1/0.5p,black', resolution='l')        
     # fig.plot(x=d1160_vlon,y=d1160_vlat,pen='2p,gray30,dashed')
     if draw_paths:
-        for i, stat in stats.iterrows():
-            fig.plot(x=[stat.EVLO, stat.STLO], y=[stat.EVLA, stat.STLA],pen='1p,black')
+        for i, row in hqdata.iterrows():
+            fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='0.75p,black')
     else:
         print('Not adding paths')
-    fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.3c', color='darkred', pen='1p,black')
-    fig.plot(x=sks.LOWMM_LON, y=sks.LOWMM_LAT, style='c0.3c', color='green', pen='1p,black')
-    fig.plot(x=skks.LOWMM_LON, y=skks.LOWMM_LAT, style='c0.3c', color='orange', pen='1p,black')
-    fig.plot(x=stats.EVLO, y=stats.EVLA, style='a0.3c', color='black', pen ='black')
-    fig.plot(x=stats.STLO,y=stats.STLA, style='i0.4c', color='red', pen='1p,black')
+    fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.2c', color='darkred', pen='1p,black')
+    fig.plot(x=sks.LOWMM_LON, y=sks.LOWMM_LAT, style='c0.2c', color='green', pen='1p,black')
+    fig.plot(x=skks.LOWMM_LON, y=skks.LOWMM_LAT, style='c0.2c', color='orange', pen='1p,black')
+    fig.plot(x=hqdata.STLO,y=hqdata.STLA, style='i0.25c', color='red', pen='1p,black')
+    fig.text(x=hqdata.STLO + 0.5, y=hqdata.STLA + 0.5, text=hqdata.STAT)
     
-    fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
+    print(hqdata)
+    # fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
+    if fname:
+        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
+    else:
+        fig.show(method='external')
+  
+def map_data_paths(data, show_pp=False, add_tomo=False, fname=None):
+    ''' 
+    Maps data used for inversion. Data that fits our 'high quality' threshold will be drawn on top and 
+    the paths will be highlighted 
+    '''
+    hqdata = data[(data.SNR >= 10.) & ((data.Q >= 0.7) | (data.Q <= -0.9))]
+    lqdata = data[~data.index.isin(hqdata.index)]
+
+    fig = pygmt.Figure()
+    fig.basemap(region=[119, 267, -12, 58],
+                projection='B195/25/10/50/15c', frame=['a20','WESn'])
+    
+    if add_tomo:
+        cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
+        s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
+        fig.grdimage(grid=s40rts, cmap=cpt)
+        fig.colorbar(cmap=cpt,
+                position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
+                frame=['a1f0.5g0.25','x+l"dVs (%)"'])
+    
+    fig.coast(shorelines='1/0.5p,black', resolution='l')
+    for i, row in lqdata.iterrows():
+        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='1p,gray30')
+    
+    for i, row in hqdata.iterrows():
+        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='1p,darkgoldenrod1')
+    
+    fig.plot(x=data.EVLO, y=data.EVLA, style='a0.25c', color='yellow', pen='0.5p,black')
+    fig.plot(x=data.STLO, y=data.STLA, style='i0.25c', color='red', pen='0.5p,black')
+    
+    
+    if show_pp:
+        fig.plot(x=lqdata.LOWMM_LON, y=lqdata.LOWMM_LAT, style='c0.1c', color='gray30', pen='0.5p,black')
+        fig.plot(x=hqdata.LOWMM_LON, y=hqdata.LOWMM_LAT, style='c0.1c', color='darkgoldenrod1', pen='0.5p,black')
+
     if fname:
         fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
     else:
         fig.show(method='external')
     
-def map_s40rts(region=[-170,-100,10,60]):
+def map_s40rts(region=[-170,-80,10,60]):
     '''
     Maps the tomography model S40RTS
 
@@ -164,20 +201,39 @@ def map_s40rts(region=[-170,-100,10,60]):
         region (array) - bounding co-ordinates of region to draw
     Using pyGMT in place of Cartopy
     '''
-    d1160_vlat = [51.5789, 49.2829, 43.4879, 51.5789]   
-    d1160_vlon = [-146.1495 , -134.1014, -144.1097, -146.1495]
     fig = pygmt.Figure()
-    fig.basemap(region=region, projection='M9i', frame=True)  
+    fig.basemap(region=region, projection='M12c', frame='a10')  
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
     s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
     fig.grdimage(grid=s40rts, cmap=cpt)
-    fig.coast(shorelines=True, resolution='i')
-    fig.plot(
-        x=d1160_vlon,
-        y=d1160_vlat,
-        pen='2p,gray30,dashed')
-    fig.show(method='external')
+    fig.coast(shorelines='0.5p,black', resolution='l')
+    fig.colorbar(cmap=cpt,
+        position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
+        frame=['a1f0.5g0.25','x+l"dVs (%)"'])
+    fig.savefig(f'{FIG_DIR}/E_pac_blank_S40RTS.png',crop=True, show=True)
+    # fig.show(method='external')
+
+def map_sks_corrections(data):
+    '''
+    Make a map showing the stations used in inversion along with Jacks stations average SKS results
+    used as the reciever side correction
+    '''
+    data = data[(data.SNR >= 10.) & ((data.Q >= 0.7) | (data.Q <= -0.9))]
+    corr = pd.read_csv('/Users/ja17375/SWSTomo/Inversions/Station_Corrections_from_Stacks.txt',
+                       delim_whitespace=True)
+    c2plot = corr[corr.STAT.isin(data.STAT)]
+    vec1 = [c2plot.Gamma.values, c2plot.Strength.values*50]
+    vec2 = [c2plot.Gamma.values + 180, c2plot.Strength.values*50]
+    fig = pygmt.Figure()
+    fig.basemap(region=[-130, -100, 25, 50], projection='M15c', frame='a5')
+    fig.coast(shorelines='0.5p,black', resolution='l')
+    fig.plot(x=data.STLO, y=data.STLA, direction=vec1, style='V0.5', pen='1p,black')
+    fig.plot(x=data.STLO, y=data.STLA, direction=vec2, style='V0.5', pen='0.5p,black')
     
+    fig.plot(x=data.STLO, y=data.STLA, style='i0.25c', color='red', pen='1p,black')
+    fig.text(x=data.STLO, y=data.STLA +0.5, text=data.STAT)
+    fig.show(method='external')
+
 if __name__ == '__main__':
     phasefile = 'E_pacific_all_phases.sdb'
     date_time_conv = {'TIME': lambda x: str(x),
@@ -192,10 +248,7 @@ if __name__ == '__main__':
         if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
             idx.append(i)
     data2plot = data.iloc[idx]
-    data2plot = data2plot[data2plot.SNR >= 10.]
-    data2plot = data2plot[(data2plot.Q >= 0.7) | (data2plot.Q <= -0.9)]
-    print(data2plot)
                           
-    map_data(data2plot, add_tomo=True, draw_paths=False, region=[-170,-100,10,60])
-    data2plot.to_csv('/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb', index=False, sep=' ')
-    
+    # map_data_paths(data2plot, show_pp=True, add_tomo=True, fname='data_paths_summary')
+   # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
+    map_sks_corrections(data2plot)
