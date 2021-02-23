@@ -8,17 +8,15 @@ Stating the paths to the requisit SAC files (which are copied to the data direct
 from xml.etree import ElementTree 
 # ElementTree is a standard (as of python 2.5) library which we can use to parse XML.
 # N.B ET is NOT secure against "malicous XML" however as we are only intersted in very simple XML this shouldnt be an issue
-from xml.etree.ElementTree import Element,SubElement
 from xml.dom import minidom
 import pandas as pd
 import os
 import glob
 import numpy as np
-from obspy.clients import iris
 from sphe_trig import vincenty_dist
 from calc_aoi import slw2aoi,get_rayparam
 from sactools import get_sac,get_mts
-from corrections import add_sside_correction, add_rside_correction,bin2domain
+from corrections import add_sside_correction, add_station_correction,bin2domain
 ###############################
 __author__ = "Joseph Asplet"
 __license__ = "MIT"
@@ -30,7 +28,7 @@ class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
     to parse/generate the XML needed for the PathSet file
     """
-    def __init__(self,phasefile,phases,domains,model=None,odir=None,config_uid='Test Run'):
+    def __init__(self,phasefile, domains=None,model=None,odir=None,config_uid='Test Run'):
         '''
         Initialise Pathsetter with some essential data, metadata. 
 
@@ -53,10 +51,11 @@ class PathSetter:
         print('Reading df')
         self.date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
         self.df = pd.read_csv(phasefile,converters=self.date_time_convert,delim_whitespace=True)
-        self.phases = phases
-        print('Phases specified are: ', self.phases)
         print('Read Trigonal Domians file')
-        self.doms = pd.read_csv(domains,delim_whitespace=True).sort_values(by='BIN')
+        if domains:
+            self.doms = pd.read_csv(domains,delim_whitespace=True).sort_values(by='BIN')
+        else:
+            print('Not using trigonal bins')
         print('Set Outdir')
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
@@ -72,7 +71,7 @@ class PathSetter:
         if model == None:
             print('Model will need to be generated before Pathsetting can be done')
         else:
-            print("Reading Model file from SWSTomo/Models".format(os.getcwd()))
+            print("Reading Model file from SWSTomo/Models")
             self.modelxml = '/Users/ja17375/SWSTomo/Models/{}'.format(model)
             self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
             self.model = self.modelroot.find('mtsML:model',self.xmlns)
@@ -116,22 +115,20 @@ class PathSetter:
             slw = get_rayparam(evdp,gcarc,phase)
             aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
             dom_h = 250
+            dist = dom_h / np.cos(np.deg2rad(aoi))
         elif (uid.split('_')[0] in ['Upper','RSide','Station']):
-            depth = 250. # Depth of upper domain (keeping domain the same thickness for now)
-
-            slw = get_rayparam(evdp,gcarc,phase)
-            aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
-            dom_h = 250
+            aoi = 0 
+            dist = 100 # 100km so we can use conversion dt/100 = strength
         elif uid.split('_')[0] == 'SSide':
             # If domain ID is SSide then we know this domain is for a source side correction. 
-            azi = 0 # For the splitting corrections we fix azi to 0
+            # azi = 0 # For the splitting corrections we fix azi to 0
             aoi = 0
-            dom_h = 100
+            dist = 100
             print('SSide')
         else:
             raise ValueError(f'Domain "{uid}"name does not match expected values')
         
-        dist = dom_h / np.cos(np.deg2rad(aoi))
+        print(dist)
         operator = ElementTree.Element('operator')
         dom_uid = ElementTree.SubElement(operator,'domain_uid')
         dom_uid.text = domain
@@ -159,28 +156,26 @@ class PathSetter:
         '''
         dml = '{{{}}}domain'.format(self.xmlns['mtsML']) 
         # need the triple curly braces to get a set of braces surrounding the mtsML
-        u = []
-        l = []
+        rdoms = []
+        ldoms = []
         sdoms = []
         self.udom_c = {}
         self.ldom_c = {}
         self.sdom_c = {}
         for dom in self.model.iter(dml):
             d_id = dom[0].text
-            if d_id.split('_')[0] == 'RSide':
-                u.append(d_id)
+            if d_id.split('_')[0] == 'Station':
+                rdoms.append(d_id)
                 self.udom_c.update({d_id : 0})
             elif d_id.split('_')[0] == 'Lower':
-                l.append(d_id)
+                ldoms.append(d_id)
                 self.ldom_c.update({d_id : 0})
             elif d_id.split('_')[0] == 'SSide':
                 # If the uid is SSide we know it is a source side correction domain. We just need to 
                 # match the correct domain to the correct phase 
                 sdoms.append(d_id)
                 self.sdom_c.update({d_id : 0 })
-                
-        ldoms = self.doms[self.doms['BIN'].isin([i.split('_')[1] for i in l ])]
-        rdoms = self.doms[self.doms['BIN'].isin([i.split('_')[1] for i in u ])]        
+                      
         return (rdoms,ldoms,sdoms)
 
     def is_phase_good(self,row,split_c=0.7, null_c=-0.9):
@@ -229,212 +224,22 @@ class PathSetter:
                 operators.append(op)
                                                 
         return operators                                      
-                                                
-    def gen_PathSet_XML(self,phases=['ScS','SKS','SKKS'],fname=None,crit=5.0):
+ 
+    def gen_PathSet_XML(self,stations, lower_dom_no=None, phases=['ScS','SKS','SKKS'],fname=None):
         '''
-        Function to iterate over the shear-wave phase data provided to Setter and to generate the correct XML to from the Pathset XML file required for Matisse. This includes adding source/ reciever side corrections where required (and where the neccesary corrections have been provided as needed by functions called by gen_PathSet_XML)
-        
-        Args:
-            phases [list] - list of phase codes to iterate over. Default is ['ScS','SKS','SKKS']
-            fname [str] - File name to write the Pathset XML to. If no name is provided then this defaults to 'Pathset'
-            
-        Returns:
-            Output XML is written to a textfile
-        '''
-        # Some quick i/o management
-        if fname == None:
-            self.pathset_xml = 'Pathset' 
-            # Set default Pathset XML file name to 'Pathset.xml' (the .xml is added later)
-        else:
-            self.pathset_xml = fname
-        #Start of main function
-        self.pathset_root = ElementTree.Element('MatisseML')
-        tree = ElementTree.ElementTree(self.pathset_root)
-        self.pathset_root.set("xmlns",self.xmlns['mtsML'])
-        pathset = ElementTree.SubElement(self.pathset_root,'pathset')
-        psuid = 'Paths for run in dir {} .'.format(self.odir)
-        pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
-        pathset_uid.text = psuid
-   
-        p = 1
-        nf = 0 # counter for files not found
-        q_fail = 0 # counter for pahses that fail Q test
-        ex = 0
-        # Before Pathsetting, parse the upper/lower domains from the model file
-        rdoms,ldoms,sdoms = self.parsedoms()
-        # [deg] - the distance criterea for including phases in a domain.
-                   #         designed to give some overlap in neighbouring domians for reduce edge effects...
-        ## Wrangle the SnKS and ScS dataframes to produce one combined dataframe we can then iterate over
-
-        for i, row in self.df.iterrows():
-            # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
-                            'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,'stat':row.STAT,
-                            'date':row.DATE,'time':row.TIME,'stat':row.STAT
-                            }
-            for ph in phases:
-                if ph == 'ScS':
-                    f = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}_{}_{}??_{}.mts'.format(
-                        attribs['stat'],ph,attribs['stat'],attribs['date'],attribs['time'],ph)
-                else:
-                    f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(
-                        attribs['stat'],ph,attribs['stat'],attribs['date'],attribs['time'],ph)
-
-                ph_good = self.is_phase_good(row,ph) 
-                # Test if phases are "good" splits or nulls
-                try:
-                    fileID = glob.glob(f)[0].strip('.mts').split('/')[-1]
-                    # Strip out .mts and split by '/', select end to get filestem
-                except IndexError:
-                    nf += 1
-                    print('No file')
-                    continue
-                if ph_good is True:     
-                    print('Pass')
-                    llat = row['LOWMM_LAT']
-                    llon = row['LOWMM_LON'.format(ph)]
-                    lowmm_ops = self.loop_thru_domains(ldoms,llat,llon,"Lower",ph,crit,
-                                                       attribs['evdp'],attribs['gcarc'],attribs['azi'])
-                    rside_ops = self.loop_thru_domains(rdoms,attribs['stla'],attribs['stlo'],"RSide",                                                      ph,crit,attribs['evdp'],attribs['gcarc'],attribs['azi'])
-                    sside_ops = [0] # placeholder, if not ScS we still need this so we iterate once over the doms
-                    if ph == 'ScS': # Only ScS needs source side domains
-                        
-                        if len(sdoms) > 0:
-#                            We have source side correction domians for each ScS phase. 
-#                            Now we need to find the right correction for the current phase in the loop.
-#                            As we have precalculated the corrections, a domain should exist for each ScS phase. 
-#                            These corrections domains are identified by Station Code and event Date/Time
-                                dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],attribs['date'],attribs['time'])
-                                sside_ops[0] = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
-                                                     attribs['azi'])
-                                if sside_ops[0] is None:
-                                    continue # move loop on as this ScS phase does not pass through the model domains
-                        else:
-#                           Overwrite sside_ops with a list of operators from loop_thru_domains
-                            sside_ops = self.loop_thru_domains(udoms,attribs['evla'],attribs['evlo'], "Upper",
-                                                               ph,crit,attribs['evdp'],
-                                                               attribs['gcarc'],attribs['azi'])    
-
-                    for s,s_op in enumerate(sside_ops):
-                        for m,l_op in enumerate(lowmm_ops):
-                            for k,r_op in enumerate(rside_ops):
-                                get_sac(fileID,attribs['stat'],ph)
-                                # Now make XML for this Path
-                                path = ElementTree.SubElement(pathset,'path')
-                                pathname = 'Path {} {}'.format(p,ph)
-                            
-                                p +=1 
-                                path_uid = ElementTree.SubElement(path,'path_uid')
-                                path_uid.text = pathname
-                                # Add Data (from .mts)
-                                data = get_mts(fileID,attribs['stat'],ph)
-                                path.append(data)
-                                stat_uid = ElementTree.SubElement(path,'station_uid')
-                                stat_uid.text = attribs['stat']
-                                evt_uid = ElementTree.SubElement(path,'event_uid')
-                                evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
-                                if ph == 'ScS':
-                                    print('Add SSide Operator to path')
-                                    print(ph, s)
-                                    path.append(s_op)
-                                print('Rside Op')
-                                path.append(l_op) 
-                                path.append(r_op)
-
-                else:
-                    q_fail +=1
-        #Now write out the Pathset XML
-        self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
-
-    def gen_Model_XML(self,mod_name=None,Low_Domains=None,Rside_Domains=None,Sside_Domains=None,Rside_corr=True):
-        '''
-        Generates the model XML file required by matisse, based off the input domains. Can configure reciever side domains with corrections for phi based off surface wave models (Schaffer et al.). It is assumed that the domains used are T3 trigonal domains defined from the geogeom routine (written by J.Wookey). Domains should be assigned an identifying number, which in theory should work for other domain set-ups but this has not bee tested (as of 15/6/20)
-        
-        Args:
-            mod_name (str) - name of the model. The model XML will be written to a file mod_name.xml
-            Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none, all domains that have some phases in the input data to Setter are used (IF you have used geogeom to bin the data already)
-            Rside_Domains (array-like) - [optional] array of all reciever-side domains to use in model. If none, reciever side for all phases (from the input data to the Setter class) assigned to a D`` domain will be added
-            Sside_Domains (array-like) - [optiona] array of all source-side domains to use in the model. These domaisn are only needed for ScS phases. If none, it is assumed that there are sourceside corrections to be added for any ScS phases. These take the form of one domain per phase, with the source side correction fixed in gamma and strength. 
-            Rside_corr (bool) - [default = True]. Switch for whether receiver side corrections should be added or not. Reciever side corrections should be pre-calculated with one correction per domain. Our preferred source for these corrections is the surface-wave anisotropy model of Schaffaer et al., 2016 SL2016svA models.
-            
-        Returns:
-            model XML written to the file mod_name.xml
-        '''
-        if mod_name is None:
-            mod_name = input('No model name provided. Enter one now :')
-      
-        s,l,r = 0,0,0
-    
-        # Write the initial xml
-        root = ElementTree.Element('MatisseML')
-        tree = ElementTree.ElementTree(root)
-        root.set("xmlns",self.xmlns['mtsML'])
-        root.append(ElementTree.Comment('Generated by gen_Model from pathset.py'))
-        m = ElementTree.SubElement(root,'model')
-        m_uid = ElementTree.SubElement(m,'model_uid')
-        m_uid.text = 'Trigonal Domains'
-        
-        if Low_Domains is None:
-            print('Using all domains in .domains file')
-            Low_Domains= self.df.LOWER_BIN.drop_duplicates().values
-
-        if Rside_Domains is None:
-            print('Finding all Reciever Side Domains')
-            rside = rdf.drop_duplicates().values
-        else:
-            rside = Rside_Domains
-
-        for i,row in self.df.iterrows():
-            if (row.LOWER_BIN in Low_Domains) & (row.PHASE == 'ScS'):
-                print(row.LOWER_BIN)
-                date, time, stat = row.DATE, row.TIME, row.STAT
-                sdom = add_sside_correction(date, time, stat)
-                m.append(sdom)
-                s += 1
-                    
-        if Rside_corr == True:
-            for rdom in rside:
-                rcorr = add_rside_correction(rdom)
-                m.append(rcorr)
-                r += 1
-        elif sside:
-            ud = np.concatenate((rside,sside))
-            udoms = np.unique(ud)
-            udoms.sort()
-            for udom in udoms:
-                dom = bin2domain('Upper_{}'.format(int(udom)))
-                m.append(dom)
-                r += 1
-        else:
-            for udom in rside:
-                dom = bin2domain('RSide_{}'.format(int(udom)))
-                m.append(dom)
-                r += 1
-
-        for ldom in Low_Domains:
-            # Loop over requested lower domains
-            dom = bin2domain('Lower_{}'.format(int(ldom)))
-            m.append(dom)
-            l+=1
-
-        print('Model Generated')
-        self.model = m
-        print('{} Upper (Sside) domains, {} Lower domains, {} Upper (Rside) domains'.format(s,l,r))
-        self._write_pretty_xml(root,file='{}/{}.xml'.format(self.opath,mod_name))
-
-    def gen_stat_PathSet_XML(self,stations, lower_dom_no=None, phases=['ScS','SKS','SKKS'],fname=None,crit=5.0,stat_only=True):
-        '''
-        Function to iterate over the shear-wave phase data provided to Setter and to generate the correct XML to from the Pathset XML file required for Matisse. This includes adding source/ reciever side corrections where required (and where the neccesary corrections have been provided as needed by functions called by gen_PathSet_XML)
+        Function to iterate over the shear-wave phase data provided to Setter and to generate the correct XML
+        to from the Pathset XML file required for Matisse. This includes adding source/ reciever side corrections
+        where required (and where the neccesary corrections have been provided as needed by functions called
+                        by gen_PathSet_XML)
+        This funciton is written assuming there is a singular D'' domain to invert for 
         
         Args:
             stations [list] - list of stations to include data for
             lower_dom_no [int or list] - lower domain of interest
             phases [list] - list of phase codes to iterate over. Default is ['ScS','SKS','SKKS']
             fname [str] - File name to write the Pathset XML to. If no name is provided then this defaults to 'Pathset'
-            crit (float) - the distance ciriterea we want to find domains for
-            stat_only [bool] - flag for whether we want to add any D'' domains or not
         Returns:
-            Output XML is written to a textfile
+            Output XML is written to fname
         '''
         # Some quick i/o management
         if fname == None:
@@ -455,12 +260,15 @@ class PathSetter:
         # Before Pathsetting, parse the upper/lower domains from the model file
         rdoms,ldoms,sdoms = self.parsedoms()
         print(ldoms)
-        df = self.df[self.df.STAT.isin(stations)]
+        if stations == 'all':
+            df = self.df
+        else:   
+            df = self.df[self.df.STAT.isin(stations)]
         
         for i, row in df.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
             attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
-                            'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,'stat':row.STAT,
+                            'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,
                             'date':row.DATE,'time':row.TIME,'stat':row.STAT
                             }
             ph = row.PHASE
@@ -489,51 +297,38 @@ class PathSetter:
                 sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],attribs['gcarc'],
                                      attribs['azi'])    
                 print(sside_op)
-            lowmm_ops = [0]
-            if stat_only:
-                lowmm_ops = [False]
-            else:
-                ldom_id = 'Lower_{}'.format(lower_dom_no)
-                dlat = ldoms.MID_LAT.values[0]
-                dlon = ldoms.MID_LON.values[0]
-                print(dlon)
-                dist = vincenty_dist(row['LOWMM_LAT'], row['LOWMM_LON'],dlat, dlon )[0]
-                if dist < crit:
-                    print('{} {}'.format(attribs['stat'],ph))
-                    lowmm_ops[0] = self.domain2operator(ldom_id,ph,attribs['evdp'],
-                                           attribs['gcarc'],attribs['azi'])
-                else:
-                    print('Path for {} {} too far from domain {} deg'.format(
-                    attribs['stat'],ph, dist))
-                    continue
 
-            for m,l_op in enumerate(lowmm_ops):
-                get_sac(fileID,attribs['stat'],ph)
-                # Now make XML for this Path
-                path = ElementTree.SubElement(pathset,'path')
-                pathname = 'Path {} {}'.format(p,ph)          
-                path_uid = ElementTree.SubElement(path,'path_uid')
-                path_uid.text = pathname
-                # Add Data (from .mts)
-                data = get_mts(fileID,attribs['stat'],ph)
-                path.append(data)
-                stat_uid = ElementTree.SubElement(path,'station_uid')
-                stat_uid.text = attribs['stat']
-                evt_uid = ElementTree.SubElement(path,'event_uid')
-                evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
-                if ph == 'ScS':
-                    print('Add SSide Operator to path')
-                    path.append(sside_op)
-                if l_op:
-                    print("Add D`` Operator")
-                    path.append(l_op) 
-                path.append(stat_op)
-                p+=1
+            ldom_id = 'Lower_{}'.format(lower_dom_no)
+            print('{} {}'.format(attribs['stat'],ph))
+            lowmm_op = self.domain2operator(ldom_id,ph,attribs['evdp'],
+                                   attribs['gcarc'],attribs['azi'])
+
+            get_sac(fileID,attribs['stat'],ph)
+            # Now make XML for this Path
+            path = ElementTree.SubElement(pathset,'path')
+            pathname = 'Path {} {}'.format(p,ph)          
+            path_uid = ElementTree.SubElement(path,'path_uid')
+            path_uid.text = pathname
+            # Add Data (from .mts)
+            data = get_mts(fileID,attribs['stat'],ph)
+            path.append(data)
+            stat_uid = ElementTree.SubElement(path,'station_uid')
+            stat_uid.text = attribs['stat']
+            evt_uid = ElementTree.SubElement(path,'event_uid')
+            evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
+            if ph == 'ScS':
+                print('Add SSide Operator to path')
+                path.append(sside_op)
+                
+            print("Add D`` Operator")
+            path.append(lowmm_op) 
+            path.append(stat_op)
+            p+=1
         #Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
         
-    def gen_stat_Model_XML(self, stations, mod_name=None, Low_Domains=None, ):
+    def gen_Model_XML(self, stations, mod_name=None, Low_Domains=None, ):
         '''
         Generates the model XML file required by matisse, with lowermost mantle domains and seperate upper mantle domains for every station requested. Source Side corrections for ScS are auto-added
         
@@ -541,8 +336,6 @@ class PathSetter:
             stations (lsit) - list of all Stations to create domains for. 
             mod_name (str) - name of the model. The model XML will be written to a file mod_name.xml
             Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none we assume this is a single domain run 
-            
-            
         Returns:
             model XML written to the file mod_name.xml
         '''
@@ -561,28 +354,25 @@ class PathSetter:
         if Low_Domains is None:
             print('No Lowermost Mantle Domains')
         
+        if stations == 'all':
+            stations =  self.df.STAT.values
+        
         for stat in stations:
-            dom = bin2domain('Station_{}'.format(stat))
+            dom = add_station_correction(stat)
             m.append(dom)
             
         for i,row in self.df.iterrows():
-            if Low_Domains is None:
-                if (row.STAT in stations) & (row.PHASE == 'ScS'):
-                    date, time, stat = row.DATE, row.TIME, row.STAT
-                    sdom = add_sside_correction(date, time, stat)
-                    m.append(sdom)
-            else:
-                print(row.LOWER_BIN)
-                if (row.STAT in stations) & (row.PHASE == 'ScS'):
-                    date, time, stat = row.DATE, row.TIME, row.STAT
-                    sdom = add_sside_correction(date, time, stat)
-                    m.append(sdom) 
+            if (row.STAT in stations) & (row.PHASE == 'ScS'):
+                date, time, stat = row.DATE, row.TIME, row.STAT
+                print(f'{date}, {time}, {stat}')
+                sdom = add_sside_correction(date, time, stat)
+                m.append(sdom)
                 
         if Low_Domains:
             for ldom in Low_Domains:
                 # Loop over requested lower domains
                 print(ldom)
-                dom = bin2domain('Lower_{}'.format(int(ldom)))
+                dom = bin2domain(f'Lower_{ldom}')
                 m.append(dom)
 
         print('Model Generated')
@@ -649,9 +439,7 @@ class PathSetter:
         c_out = counts[~mask]
         print('Done')
         return c_out
-                        
-                        
-    
+ 
     def gen_MTS_Info(self):
         '''
         Function to create the simple XML file "MTS_Info"
@@ -769,7 +557,7 @@ def find_phases_in_domain(phasefile,dom_ID,layer='Lower',crit=5.0,save=False):
     '''
     date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
     df = pd.read_csv(phasefile,converters=date_time_convert,delim_whitespace=True)
-    domains = np.loadtxt('T3_global.bins',skiprows=1)
+    domains = np.loadtxt('/Users/ja17375/SWSTomo/Inversions/T3_global.bins',skiprows=1)
 #     dom = domains[domains[:,0] == dom_ID]
     dom = domains[np.isin(domains[:,0],dom_ID)]
     dlat = dom[0,1]
@@ -786,7 +574,7 @@ def find_phases_in_domain(phasefile,dom_ID,layer='Lower',crit=5.0,save=False):
         dist = vincenty_dist(dlat, dlon, plat, plon)[0]
         
         if dist <= crit:
-            print(phase.STAT, phase.PHASE, dist)
+            #print(phase.STAT, phase.PHASE, dist)
             #Is the phase within a fixed distance from domain center
             idx.append(i)
     df_out = df.iloc[idx]
@@ -816,4 +604,14 @@ def split_by_stats(phasefile, stats):
         stat_df.to_csv('./StatCorr/{}_goodQ.sdb'.format(stat),sep=' ',index=False)
         
     print('Done')
-        
+
+if __name__ == '__main__':
+    # Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
+    # odir='/Users/ja17375/SWSTomo/Inversions/EP_fast_anom/')
+    # Set.gen_Model_XML(stations='all', mod_name='EP_fast_anom_Model', Low_Domains=['fast_anom'])
+    
+    Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
+    odir='/Users/ja17375/SWSTomo/Inversions/EP_fast_anom/', model='EP_fast_anom_Model.xml')
+    Set.gen_PathSet_XML(stations='all',lower_dom_no='fast_anom',
+                        phases=['ScS','SKS','SKKS'],fname='EP_fast_anom_Paths.xml')
+    

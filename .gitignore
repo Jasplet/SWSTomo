@@ -1,3 +1,6 @@
-.gmt
-sac
-.corrs
+*.gmt
+*.sac
+*.corrs
+*.xml
+*.counts
+*.png

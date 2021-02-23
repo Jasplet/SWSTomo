@@ -106,7 +106,7 @@ def check_if_sside_corr(df):
     return df_w_corr
 
 
-def add_rside_correction(dom,cfile='/Users/ja17375/SWSTomo/SchafferSurfaceWaveModels/SL2016svAs_T3mesh_w_by_both.mod'):
+def add_station_correction(stat,cfile='/Users/ja17375/SWSTomo/Inversions/Station_Corrections_from_Stacks.txt'):
     '''
     This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
     
@@ -114,16 +114,17 @@ def add_rside_correction(dom,cfile='/Users/ja17375/SWSTomo/SchafferSurfaceWaveMo
     get them to fit into our scheme
     
     Args:
-        dom (float, str or int) - unique indentifying number for the domain. Converted to int when used in uid
+        dom (float) - unique indentifying number for the domain. Converted to int when used in uid
         cfile (str) - path to file containing the reciever side corrections to add
         
     Returns:
         corr_dom (domain) - Etree object containing the XML for the corrected domain. 
     '''
-    corrections = np.loadtxt(cfile,skiprows=1)
-    corr = corrections[corrections[:,0] == dom][0]
-    phi = corr[3]
-    uid = 'RSide_{}'.format(int(dom))
-    corr_dom = bin2domain(uid,gc=phi)
+    corrections = pd.read_csv(cfile, delim_whitespace=True)
+    corr = corrections[corrections.STAT == stat]
+    phi = corr.Gamma.values[0]
+    s = corr.Strength.values[0]
+    uid = f'Station_{stat}'
+    corr_dom = bin2domain(uid,sc=s, gc=phi)
     
     return corr_dom 

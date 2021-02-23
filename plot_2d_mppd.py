@@ -152,7 +152,7 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     ax_y.set_ylim(ylim)
     plt.colorbar(C,cax=ax_c)
         
-    ax_main.plot(x[icol],y[irow],'xb',markersize=15)
+    #ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     print(r'Most likely (maxima) points is $\gamma = ${}, $s = ${}'.format(y[irow],x[icol]))
     plt.setp(ax_main.get_xticklabels(),visible=False)
     plt.setp(ax_main.get_yticklabels(),visible=False)
@@ -180,7 +180,7 @@ def write_out_most_likely(idx,g,s):
 if __name__ == "__main__":
     # If this script is being run from the command line
     # idx = sys.argv[0] # expected usage is plot_2d_mppd.py 001
-    ## Parse argueemnts
+    ## Parse argueemnts
     parser = argparse.ArgumentParser()
     parser.add_argument("-s","--save",action="store_true",help="saves MPPD plots")
     parser.add_argument("-f","--filename",default="plot",action="store",type=str,help="file name that will be appended to MPPD_xxx")
