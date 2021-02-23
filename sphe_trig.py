@@ -38,9 +38,9 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
     a = 6378137.0 #[m] length of semi-major axis (radius at equator)
     f = 1/298.257223563 # flattening of the ellipsoid
     b = (1 - f) * a  # [m] length of semi-minor axis  (radius at poles)
-    tol = t # tolerance for iterations to find L
+    tol = t # tolerance for iterations to find L
     #
-    phi1, phi2 = deg2rad(lat1), deg2rad(lat2) # convert to radians and name variabes to match Vincety forumula for sanitys sake
+    phi1, phi2 = deg2rad(lat1), deg2rad(lat2) # convert to radians and name variabes to match Vincety forumula for sanitys sake
     L1, L2 = deg2rad(lon1), deg2rad(lon2)
     L = L2 - L1
     # Calculate the reduced latitudes (latitude on the auxilliary sphere)
@@ -86,7 +86,7 @@ def vincenty_dist(lat1,lon1,lat2,lon2,t=1e-12,deg=True):
     ds = cos_2_sig_m + 0.25*B*(cos_sigma*(-1 + 2*cos_2_sig_m**2))
     ds += B*cos_2_sig_m*(-3 + 4*sin_sigma**2)*(-3 + 4*cos_2_sig_m**2) / 6
     delta_sigma = B*sin_sigma*ds
-    s = b*A*(sigma - delta_sigma) # Distance in km
+    s = b*A*(sigma - delta_sigma) # Distance in km
     a1 = arctan2(cos(U2)*sin(lam), cos(U1)*sin(U2) - sin(U1)*cos(U2)*cos(lam))
     a2 = arctan2(cos(U1)*sin(lam), -sin(U1)*cos(U2) + cos(U1)*sin(U2)*cos(lam))
     if deg is True:
