@@ -8,8 +8,11 @@ Created on Wed Nov 18 16:12:12 2020
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.interpolate import RegularGridInterpolator, LinearNDInterpolator
+from scipy.interpolate import griddata
+import matplotlib.pyplot as plt
 from l2stats import ftest
+FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
+
 
 class Ensemble:
     '''
@@ -18,12 +21,13 @@ class Ensemble:
      retooling - i.e figuring out what column is what as the output Ensembles 
      have no column headings)
     '''
-    def __init__(self, rundir, read=True, dims='ags',fname='MTS_ensemble.out'):
+    def __init__(self, rundir, read=True, dims='ags', strmax=0.02, fname='MTS_ensemble.out'):
         '''
         Read raw ensemble and transform it back from the normalise parameter space
         '''
         self.model_config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
-                             'gamma_max': 180, 'strength_min': 0, 'strength_max': 0.04}
+                             'gamma_max': 180, 'strength_min': 0, 'strength_max': strmax}
+
         self.rundir = rundir
         if read:
             raw_ensemble = self.read_ensemble(rundir,fname)
@@ -40,6 +44,13 @@ class Ensemble:
                 misfit = 1 / raw_ensemble[:, -1]
                 self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
                                            'strength':strength, 'misfit': misfit})
+                print('Model Config set as:')
+                print('{} < alpha < {}'.format(self.model_config['alpha_min'], self.model_config['alpha_max']))
+                print('Beta = fixed')
+                print('{} < gamma < {}'.format(self.model_config['gamma_min'], self.model_config['gamma_max']))
+                print('{} < strength < {}'.format(self.model_config['strength_min'],
+                                                  self.model_config['strength_max']))
+                      
             elif dims == 'ag':
                 #2-D alpha and gamma only
                 alpha = self.restore_params(raw_ensemble[:,0],
@@ -153,31 +164,79 @@ class Ensemble:
             print(f'Gamma = {self.best_fitting_model[1]:.5f}')
             print(f'Strength = {self.best_fitting_model[2]:.5f}')
             print(f'Model misfit = {self.best_fitting_model[3]:.5f}')
+       
+    def read_3d_pdf(self, fileID):
+        ''' Reads existing 3D PDF '''
+        self.pdf_3d = np.load(fileID)
+        # check pdf is evenly sampled
+        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[1]
+        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[2]
+        self.nsamps = self.pdf_3d.shape[0]
+        # Now we know sampling is even, generate sample values
+        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
+                                         self.model_config['alpha_max'],self.nsamps)
+        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
+                                         self.model_config['gamma_max'],self.nsamps)
+        self.strength_samples = np.linspace(self.model_config['strength_min'],
+                                            self.model_config['strength_max'],self.nsamps)
+      
+    def save_3d_pdf(self, outfile):
+        ''' Saves 3-D PDF as Numpy Array'''
+        np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
     
-    def slice_3d_volume(self, axis, value, n, method):
+    def plot_2d_sections(self, ndf, fname=None):
         '''
-        Interpolates 3D models along a give axis to return a regularaly sampled 2-D slice
-        This can be done to interpolate either model misfit or the 3D PDF (if the PDF has been generated)
+        Plots 2d sections through the input models (through each axis)
+        '''
+        m = self.find_best_fitting(ret=True)
+        self.find_fcrit(ndf)
         
-        '''        
-        if method == 'pdf':
-            pdf = self.pdf_3d / self.pdf_3d.max()
-            interp_function = RegularGridInterpolator((self.alpha_samples,
-                                                   self.gamma_samples,
-                                                   self.strength_samples),
-                                                      pdf)
-        elif method == 'misfit':
-            misfit = self.models.misfit
-            models = np.vstack([self.models.alpha,
-                               self.models.gamma,
-                               self.models.strength]).T
-            interp_function = LinearNDInterpolator(models, misfit)
+        fig = plt.figure(figsize=(20, 6))
+        #make left plot (alpha v strength) - Gamma is fixed
+        sec1 = self.make_section(m[1], axis='gamma')
+        (xi, yi, asgrid) = self.grid_section(sec1, axis='gamma')
+        ax1 = fig.add_subplot(1, 3, 1)
+        # ax1.contour(xi, yi, asgrid, levels=[self.fcrit])
+        # ax1.contourf(xi, yi, asgrid, levels=10, cmap='viridis_r')
+        ax1.scatter(x=sec1.strength, y=sec1.alpha, c=sec1.misfit, cmap='viridis_r',vmin=m[3])
+        ax1.set_xlabel('Strength')
+        ax1.set_ylabel(r'Alpha ($\degree$)')
+        ax1.set_title(f'2D section through gamma = {m[1]:5.3f}')
+                    
+        # make middle plot (gamma v strength )
+        sec2 = self.make_section(m[0], axis='alpha')
+        # (xi, yi, gsgrid) = self.grid_section(sec2, axis='alpha')
+        ax2 = fig.add_subplot(1, 3, 2)
+        # ax2.contourf(xi, yi, gsgrid, levels=10, cmap='viridis_r')
+        # ax2.contour(xi, yi, gsgrid, [self.fcrit])
+        ax2.scatter(x=sec2.strength, y=sec2.gamma, c=sec2.misfit, cmap='viridis_r',vmin=m[3])
+        ax2.set_xlabel('Strength')
+        ax2.set_ylabel(r'Gamma ($\degree$)')
+        ax2.set_title(f'2D section through alpha = {m[0]:5.3f}')
         
-        aa, gg, ss = self.gen_2d_param_grid(axis, value, n)
-        points =  np.vstack((aa.flatten(), gg.flatten(), ss.flatten())).T # Stack samples points together. Taking transerve makes it a row 
-        slc = interp_function(points).reshape(n, n)   
-        return points, slc
-
+        #make right plot (alpha v gamma)
+        sec3 = self.make_section(m[2], axis='strength')
+        # (xi, yi, aggrid) = self.grid_section(sec3, axis='strength')
+        ax3 = fig.add_subplot(1, 3, 3)
+        # ax3.contourf(xi, yi, aggrid, levels=10, cmap='viridis_r')
+        # ax3.contour(xi, yi, aggrid, [self.fcrit])
+        C = ax3.scatter(x=sec3.alpha, y=sec3.gamma, c=sec3.misfit, cmap='viridis_r',vmin=m[3])
+        ax3.set_xlabel(r'Alpha ($\degree$)')
+        ax3.set_ylabel(r'Gamma ($\degree$)')
+        ax3.set_title(f'2D section through strength = {m[2]:5.3f}')
+        
+        #Add model we are slicing through to each section
+        ax1.plot(m[2], m[0], marker='x', color='red')
+        ax2.plot(m[2], m[1], marker='x', color='red')
+        ax3.plot(m[0], m[1], marker='x', color='red')
+        fig.suptitle('2-D sections through model space, intersecting at best fitting model (+/- 0.1%)',
+                     fontsize=14)
+        fig.colorbar(C, ax=ax3)
+        if fname:
+            plt.savefig(f'{FIG_DIR}/{fname}')
+        else:
+            plt.show()
+    
     def gen_2d_param_grid(self, axis, value, n):
         '''
         Function that makes regular grids of models parameters for where one parameter (or axis) of the model 
@@ -205,40 +264,80 @@ class Ensemble:
                 gg = np.ones(aa.shape) * value
             else:
                 raise ValueError(f'Value {value} for gamma is outside limits')   
-                                 
+                                     
+            elif axis == 'strength':
+                if (value >= self.model_config['strength_min']) & (value <= self.model_config['strength_max']):
+                    a = np.linspace(self.model_config['alpha_min'],
+                                    self.model_config['alpha_max'], n)
+                    g = np.linspace(self.model_config['gamma_min'],
+                                    self.model_config['gamma_max'], n)
+                    aa, gg = np.meshgrid(a, g)
+                    ss = np.ones(aa.shape) * value
+                else:
+                    raise ValueError(f'Value {value} for strength is outside limits')
+            else:    
+                raise ValueError(f'{axis} not recognised')
+    
+            return aa, gg, ss
+    
+    def grid_misfit_volume(self):
+        '''Grids the models so we can make pretty plots (i hope) '''
+        a = self.models.alpha.values
+        g = self.models.gamma.values
+        s = self.models.strength.values
+        mfit = self.models.misift.values
+        xi, yi, zi = np.mgrid[self.model_config['alpha_min']:self.model_config['alpha_max']:100j,
+                              self.model_config['gamma_min']:self.model_config['gamma_max']:100j,
+                              self.model_config['strength_min']:self.model_config['strength_max']:100j
+                              ]
+        grid = griddata((a, g, s), mfit, (xi, yi, zi), method='linear')
+    
+    def grid_section(self, sec, axis):
+        '''  
+        Takes a 2-D section and makes a regularly spaced grid (for contouring)
+        '''
+        if axis not in ['alpha', 'gamma', 'strength']:
+            raise ValueError(f'Axis {axis} undefined')
+        elif axis == 'alpha':
+            # alpha is fixed so slice is in gamma/str
+            xi, yi = np.mgrid[self.model_config['strength_min']:self.model_config['strength_max']:2000j,
+                              self.model_config['gamma_min']:self.model_config['gamma_max']:2000j]
+            grid = griddata((sec.strength, sec.gamma), sec.misfit, (xi, yi), method='linear')
+        elif axis == 'gamma':
+            xi, yi = np.mgrid[self.model_config['strength_min']:self.model_config['strength_max']:2000j,
+                              self.model_config['alpha_min']:self.model_config['alpha_max']:2000j]
+            grid = griddata((sec.strength, sec.alpha), sec.misfit, (xi, yi), method='linear')       
         elif axis == 'strength':
-            if (value >= self.model_config['strength_min']) & (value <= self.model_config['strength_max']):
-                a = np.linspace(self.model_config['alpha_min'],
-                                self.model_config['alpha_max'], n)
-                g = np.linspace(self.model_config['gamma_min'],
-                                self.model_config['gamma_max'], n)
-                aa, gg = np.meshgrid(a, g)
-                ss = np.ones(aa.shape) * value
-            else:
-                raise ValueError(f'Value {value} for strength is outside limits')
-        else:    
-            raise ValueError(f'{axis} not recognised')
-
-        return aa, gg, ss
+            xi, yi = np.mgrid[self.model_config['alpha_min']:self.model_config['alpha_max']:2000j,
+                              self.model_config['gamma_min']:self.model_config['gamma_max']:2000j]
+            grid = griddata((sec.alpha, sec.gamma), sec.misfit, (xi, yi), method='linear')
+            
+        return xi, yi, grid
     
-    def read_3d_pdf(self, fileID):
-        ''' Reads existing 3D PDF '''
-        self.pdf_3d = np.load(fileID)
-        # check pdf is evenly sampled
-        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[1]
-        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[2]
-        self.nsamps = self.pdf_3d.shape[0]
-        # Now we know sampling is even, generate sample values
-        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
-                                         self.model_config['alpha_max'],self.nsamps)
-        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
-                                         self.model_config['gamma_max'],self.nsamps)
-        self.strength_samples = np.linspace(self.model_config['strength_min'],
-                                            self.model_config['strength_max'],self.nsamps)
-
+    def make_section(self, value, axis):
+        '''
+    
+        '''
+        if axis not in ['alpha', 'gamma', 'strength']:
+            raise ValueError(f'Axis {axis} undefined')
+        elif axis == 'alpha':
+            cols = ['gamma', 'strength', 'misfit']
+            assert np.less_equal(value, self.model_config['alpha_max'])
+            assert np.greater_equal(value, self.model_config['alpha_min'])
+        elif axis == 'gamma':
+            cols = ['alpha', 'strength', 'misfit']
+            assert np.less_equal(value, self.model_config['gamma_max'])
+            assert np.greater_equal(value, self.model_config['gamma_min'])
+        elif axis == 'strength':
+            cols = ['alpha', 'gamma', 'misfit']
+            assert np.less_equal(value, self.model_config['strength_max'])
+            assert np.greater_equal(value, 0)
+            
+        slc = self.models[(np.isclose(self.models[axis], value, rtol=1.e-2)) & (self.models['misfit'] <= 1)]
+        section = slc[cols]
         
-    def save_3d_pdf(self, outfile):
-        ''' Saves 3-D PDF as Numpy Array'''
-        np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
-    
-    
+        return section  
+
+if __name__ == '__main__':
+    ppv = Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_model/', strmax=0.5)
+    ppv.make_section
