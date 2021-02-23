@@ -227,11 +227,18 @@ def map_sks_corrections(data):
     fig = pygmt.Figure()
     fig.basemap(region=[-130, -100, 25, 50], projection='M15c', frame='a5')
     fig.coast(shorelines='0.5p,black', resolution='l')
-    fig.plot(x=data.STLO, y=data.STLA, direction=vec1, style='V0.5', pen='1p,black')
-    fig.plot(x=data.STLO, y=data.STLA, direction=vec2, style='V0.5', pen='0.5p,black')
+    fig.plot(x=data.STLO, y=data.STLA, direction=vec1, style='V0.75', pen='1p,black')
+    fig.plot(x=data.STLO, y=data.STLA, direction=vec2, style='V0.75', pen='1p,black')
     
     fig.plot(x=data.STLO, y=data.STLA, style='i0.25c', color='red', pen='1p,black')
-    fig.text(x=data.STLO, y=data.STLA +0.5, text=data.STAT)
+    for i,stat in data.iterrows():
+        if stat.STAT == 'FACU':
+            fig.text(x=stat.STLO, y=stat.STLA-0.5, text=stat.STAT)
+        else:
+            fig.text(x=stat.STLO, y=stat.STLA +0.5, text=stat.STAT)
+    fig.plot(x=-125, y=27, direction=[[90], [0.5]], style='V0.75', pen='2p,black')
+    fig.plot(x=-125, y=27, direction=[[270], [0.5]], style='V0.75', pen='2p,black')
+    fig.text(x=-125, y=27.6, text='1 s')
     fig.show(method='external')
 
 if __name__ == '__main__':
