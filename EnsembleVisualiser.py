@@ -8,7 +8,7 @@ Created on Wed Nov 18 16:12:12 2020
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.interpolate import griddata
+from scipy.interpolate import griddata, RegularGridInterpolator
 import matplotlib.pyplot as plt
 from l2stats import ftest
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
@@ -25,7 +25,7 @@ class Ensemble:
         '''
         Read raw ensemble and transform it back from the normalise parameter space
         '''
-        self.model_config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
+        self.config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
                              'gamma_max': 180, 'strength_min': 0, 'strength_max': strmax}
 
         self.rundir = rundir
@@ -33,11 +33,11 @@ class Ensemble:
             raw_ensemble = self.read_ensemble(rundir,fname)
             if dims == 'ags':
                 alpha = self.restore_params(raw_ensemble[:,0],
-                                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                                    self.config['alpha_min'], self.config['alpha_max'])
                 gamma = self.restore_params(raw_ensemble[:,1],
-                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                                    self.config['gamma_min'], self.config['gamma_max'])
                 strength = self.restore_params(raw_ensemble[:,2],
-                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                                    self.config['strength_min'], self.config['strength_max'])
                 # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
                 # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
                 # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
@@ -45,34 +45,34 @@ class Ensemble:
                 self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
                                            'strength':strength, 'misfit': misfit})
                 print('Model Config set as:')
-                print('{} < alpha < {}'.format(self.model_config['alpha_min'], self.model_config['alpha_max']))
+                print('{} < alpha < {}'.format(self.config['alpha_min'], self.config['alpha_max']))
                 print('Beta = fixed')
-                print('{} < gamma < {}'.format(self.model_config['gamma_min'], self.model_config['gamma_max']))
-                print('{} < strength < {}'.format(self.model_config['strength_min'],
-                                                  self.model_config['strength_max']))
+                print('{} < gamma < {}'.format(self.config['gamma_min'], self.config['gamma_max']))
+                print('{} < strength < {}'.format(self.config['strength_min'],
+                                                  self.config['strength_max']))
                       
             elif dims == 'ag':
                 #2-D alpha and gamma only
                 alpha = self.restore_params(raw_ensemble[:,0],
-                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                    self.config['alpha_min'], self.config['alpha_max'])
                 gamma = self.restore_params(raw_ensemble[:,1],
-                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                                    self.config['gamma_min'], self.config['gamma_max'])
                 misfit = 1 / raw_ensemble[:, -1]
                 self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
                                             'misfit': misfit})
             elif dims == 'as':
                 alpha = self.restore_params(raw_ensemble[:,0],
-                    self.model_config['alpha_min'], self.model_config['alpha_max'])
+                    self.config['alpha_min'], self.config['alpha_max'])
                 strength = self.restore_params(raw_ensemble[:,1],
-                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                                    self.config['strength_min'], self.config['strength_max'])
                 misfit = 1 / raw_ensemble[:, -1]
                 self.models = pd.DataFrame({'alpha': alpha, 'strength': strength,
                                            'misfit': misfit})
             elif dims == 'gs':
                 gamma = self.restore_params(raw_ensemble[:,0],
-                                    self.model_config['gamma_min'], self.model_config['gamma_max'])
+                                    self.config['gamma_min'], self.config['gamma_max'])
                 strength = self.restore_params(raw_ensemble[:,1],
-                                    self.model_config['strength_min'], self.model_config['strength_max'])
+                                    self.config['strength_min'], self.config['strength_max'])
                 misfit = 1 / raw_ensemble[:, -1]
                 self.models = pd.DataFrame({'gamma': gamma,
                                            'strength':strength, 'misfit': misfit})
@@ -110,12 +110,12 @@ class Ensemble:
     def evaluate_3d_kde(self, nsamps=50):
         ''' Function to make the full 3D PDF from model Ensemble. As we are using all 3 params
         (alpha, gamma, strength) we do not need to worry about handling different combos'''
-        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
-                                         self.model_config['alpha_max'],nsamps)
-        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
-                                         self.model_config['gamma_max'],nsamps)
-        self.strength_samples = np.linspace(self.model_config['strength_min'],
-                                            self.model_config['strength_max'],nsamps)
+        self.alpha_samples = np.linspace(self.config['alpha_min'],
+                                         self.config['alpha_max'],nsamps)
+        self.gamma_samples = np.linspace(self.config['gamma_min'],
+                                         self.config['gamma_max'],nsamps)
+        self.strength_samples = np.linspace(self.config['strength_min'],
+                                            self.config['strength_max'],nsamps)
         a_samp, g_samp, s_samp = np.meshgrid(
                                     self.alpha_samples,
                                     self.gamma_samples,
@@ -173,171 +173,86 @@ class Ensemble:
         assert self.pdf_3d.shape[0] == self.pdf_3d.shape[2]
         self.nsamps = self.pdf_3d.shape[0]
         # Now we know sampling is even, generate sample values
-        self.alpha_samples = np.linspace(self.model_config['alpha_min'],
-                                         self.model_config['alpha_max'],self.nsamps)
-        self.gamma_samples = np.linspace(self.model_config['gamma_min'],
-                                         self.model_config['gamma_max'],self.nsamps)
-        self.strength_samples = np.linspace(self.model_config['strength_min'],
-                                            self.model_config['strength_max'],self.nsamps)
+        self.alpha_samples = np.linspace(self.config['alpha_min'],
+                                         self.config['alpha_max'],self.nsamps)
+        self.gamma_samples = np.linspace(self.config['gamma_min'],
+                                         self.config['gamma_max'],self.nsamps)
+        self.strength_samples = np.linspace(self.config['strength_min'],
+                                            self.config['strength_max'],self.nsamps)
       
     def save_3d_pdf(self, outfile):
         ''' Saves 3-D PDF as Numpy Array'''
         np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
-    
-    def plot_2d_sections(self, ndf, fname=None):
-        '''
-        Plots 2d sections through the input models (through each axis)
-        '''
-        m = self.find_best_fitting(ret=True)
-        self.find_fcrit(ndf)
-        
-        fig = plt.figure(figsize=(20, 6))
-        #make left plot (alpha v strength) - Gamma is fixed
-        sec1 = self.make_section(m[1], axis='gamma')
-        (xi, yi, asgrid) = self.grid_section(sec1, axis='gamma')
-        ax1 = fig.add_subplot(1, 3, 1)
-        # ax1.contour(xi, yi, asgrid, levels=[self.fcrit])
-        # ax1.contourf(xi, yi, asgrid, levels=10, cmap='viridis_r')
-        ax1.scatter(x=sec1.strength, y=sec1.alpha, c=sec1.misfit, cmap='viridis_r',vmin=m[3])
-        ax1.set_xlabel('Strength')
-        ax1.set_ylabel(r'Alpha ($\degree$)')
-        ax1.set_title(f'2D section through gamma = {m[1]:5.3f}')
-                    
-        # make middle plot (gamma v strength )
-        sec2 = self.make_section(m[0], axis='alpha')
-        # (xi, yi, gsgrid) = self.grid_section(sec2, axis='alpha')
-        ax2 = fig.add_subplot(1, 3, 2)
-        # ax2.contourf(xi, yi, gsgrid, levels=10, cmap='viridis_r')
-        # ax2.contour(xi, yi, gsgrid, [self.fcrit])
-        ax2.scatter(x=sec2.strength, y=sec2.gamma, c=sec2.misfit, cmap='viridis_r',vmin=m[3])
-        ax2.set_xlabel('Strength')
-        ax2.set_ylabel(r'Gamma ($\degree$)')
-        ax2.set_title(f'2D section through alpha = {m[0]:5.3f}')
-        
-        #make right plot (alpha v gamma)
-        sec3 = self.make_section(m[2], axis='strength')
-        # (xi, yi, aggrid) = self.grid_section(sec3, axis='strength')
-        ax3 = fig.add_subplot(1, 3, 3)
-        # ax3.contourf(xi, yi, aggrid, levels=10, cmap='viridis_r')
-        # ax3.contour(xi, yi, aggrid, [self.fcrit])
-        C = ax3.scatter(x=sec3.alpha, y=sec3.gamma, c=sec3.misfit, cmap='viridis_r',vmin=m[3])
-        ax3.set_xlabel(r'Alpha ($\degree$)')
-        ax3.set_ylabel(r'Gamma ($\degree$)')
-        ax3.set_title(f'2D section through strength = {m[2]:5.3f}')
-        
-        #Add model we are slicing through to each section
-        ax1.plot(m[2], m[0], marker='x', color='red')
-        ax2.plot(m[2], m[1], marker='x', color='red')
-        ax3.plot(m[0], m[1], marker='x', color='red')
-        fig.suptitle('2-D sections through model space, intersecting at best fitting model (+/- 0.1%)',
-                     fontsize=14)
-        fig.colorbar(C, ax=ax3)
-        if fname:
-            plt.savefig(f'{FIG_DIR}/{fname}')
-        else:
-            plt.show()
-    
-    def gen_2d_param_grid(self, axis, value, n):
-        '''
-        Function that makes regular grids of models parameters for where one parameter (or axis) of the model 
-        is fixed.
-        This is to facilitate the interpolation of 2-D slices through a 3-D volume
-        '''
-        if axis == 'alpha':
-            if (value >= self.model_config['gamma_min']) & (value <= self.model_config['gamma_max']):
-                g = np.linspace(self.model_config['gamma_min'],
-                                self.model_config['gamma_max'], n)
-                s = np.linspace(self.model_config['strength_min'],
-                                self.model_config['strength_max'], n)
-                gg, ss = np.meshgrid(g, s)
-                aa = np.ones(gg.shape) *value
-            else:
-                raise ValueError(f'Value {value} for alpha is outside limits')  
-                
-        elif axis == 'gamma':
-            if (value >= self.model_config['gamma_min']) & (value <= self.model_config['gamma_max']):
-                a = np.linspace(self.model_config['alpha_min'],
-                                self.model_config['alpha_max'], n)
-                s = np.linspace(self.model_config['strength_min'],
-                             self.model_config['strength_max'], n)
-                aa, ss = np.meshgrid(a, s)
-                gg = np.ones(aa.shape) * value
-            else:
-                raise ValueError(f'Value {value} for gamma is outside limits')   
-                                     
-            elif axis == 'strength':
-                if (value >= self.model_config['strength_min']) & (value <= self.model_config['strength_max']):
-                    a = np.linspace(self.model_config['alpha_min'],
-                                    self.model_config['alpha_max'], n)
-                    g = np.linspace(self.model_config['gamma_min'],
-                                    self.model_config['gamma_max'], n)
-                    aa, gg = np.meshgrid(a, g)
-                    ss = np.ones(aa.shape) * value
-                else:
-                    raise ValueError(f'Value {value} for strength is outside limits')
-            else:    
-                raise ValueError(f'{axis} not recognised')
-    
-            return aa, gg, ss
-    
-    def grid_misfit_volume(self):
-        '''Grids the models so we can make pretty plots (i hope) '''
-        a = self.models.alpha.values
-        g = self.models.gamma.values
-        s = self.models.strength.values
-        mfit = self.models.misift.values
-        xi, yi, zi = np.mgrid[self.model_config['alpha_min']:self.model_config['alpha_max']:100j,
-                              self.model_config['gamma_min']:self.model_config['gamma_max']:100j,
-                              self.model_config['strength_min']:self.model_config['strength_max']:100j
-                              ]
-        grid = griddata((a, g, s), mfit, (xi, yi, zi), method='linear')
-    
-    def grid_section(self, sec, axis):
-        '''  
-        Takes a 2-D section and makes a regularly spaced grid (for contouring)
-        '''
-        if axis not in ['alpha', 'gamma', 'strength']:
-            raise ValueError(f'Axis {axis} undefined')
-        elif axis == 'alpha':
-            # alpha is fixed so slice is in gamma/str
-            xi, yi = np.mgrid[self.model_config['strength_min']:self.model_config['strength_max']:2000j,
-                              self.model_config['gamma_min']:self.model_config['gamma_max']:2000j]
-            grid = griddata((sec.strength, sec.gamma), sec.misfit, (xi, yi), method='linear')
-        elif axis == 'gamma':
-            xi, yi = np.mgrid[self.model_config['strength_min']:self.model_config['strength_max']:2000j,
-                              self.model_config['alpha_min']:self.model_config['alpha_max']:2000j]
-            grid = griddata((sec.strength, sec.alpha), sec.misfit, (xi, yi), method='linear')       
-        elif axis == 'strength':
-            xi, yi = np.mgrid[self.model_config['alpha_min']:self.model_config['alpha_max']:2000j,
-                              self.model_config['gamma_min']:self.model_config['gamma_max']:2000j]
-            grid = griddata((sec.alpha, sec.gamma), sec.misfit, (xi, yi), method='linear')
-            
-        return xi, yi, grid
-    
-    def make_section(self, value, axis):
-        '''
-    
-        '''
-        if axis not in ['alpha', 'gamma', 'strength']:
-            raise ValueError(f'Axis {axis} undefined')
-        elif axis == 'alpha':
-            cols = ['gamma', 'strength', 'misfit']
-            assert np.less_equal(value, self.model_config['alpha_max'])
-            assert np.greater_equal(value, self.model_config['alpha_min'])
-        elif axis == 'gamma':
-            cols = ['alpha', 'strength', 'misfit']
-            assert np.less_equal(value, self.model_config['gamma_max'])
-            assert np.greater_equal(value, self.model_config['gamma_min'])
-        elif axis == 'strength':
-            cols = ['alpha', 'gamma', 'misfit']
-            assert np.less_equal(value, self.model_config['strength_max'])
-            assert np.greater_equal(value, 0)
-            
-        slc = self.models[(np.isclose(self.models[axis], value, rtol=1.e-2)) & (self.models['misfit'] <= 1)]
-        section = slc[cols]
-        
-        return section  
 
+    def param_kde(self, ax, p, param):
+        '''
+        Make a Kernel Density estimate of the parameter and plot on fig axis
+        '''
+        kde = stats.gaussian_kde(p)
+        if param in ['alpha','gamma','strength']:
+            mx = self.config[f'{param}_max']
+            mn = self.config[f'{param}_min']
+        elif param == 'misfit':
+            mx = 1
+            mn = 0 
+        else:
+            raise ValueError
+        
+        xx = np.linspace(mn, mx, 1000)
+        y = kde(xx)
+        ax.plot(xx, y)
+        ax.set_xlim([mn, mx])
+        ax.set_ylim([0, y.max()*1.15])
+        return y.max()
+    
+    def plot_param_hists(self,candidate):
+        '''
+        Makes a 4-panel histogram of model parameters and misfit
+        '''  
+        if candidate == 'ellip':
+            title = 'Elliptical TI'
+            fout = 'ellip_TI'
+        elif candidate == 'br':
+            title = 'Bridgmanite (100)[001]'
+            fout = 'br_100_001'
+            bestmodel = [42.85864, 22.26776,
+                         0.25486, 0.42735]
+        elif candidate == 'ppv1':
+            title = 'Post-Perovskite (001)[100]'
+            fout = 'ppv_001_100'
+            bestmodel = [22.80220, -84.61130,
+                         0.10352, 0.44248]
+        elif candidate == 'ppv2':
+            title = 'Post-Perovskite (010)[100]'
+            fout = 'ppv_010_100'
+        fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(nrows=2, ncols=2, figsize=(7,7))
+        
+        # ax1.hist(self.models.alpha,bins=20)
+        a_kde = self.param_kde(ax1, self.models.alpha, 'alpha')
+        ax1.vlines(bestmodel[0], ymin=0, ymax=a_kde*1.15)
+        ax1.set_title('Alpha')
+        ax1.set_ylabel('Density')
+        ax1.set_xticks([0, 30, 60, 90])
+        # ax2.hist(self.models.gamma,bins=20)
+        g_kde = self.param_kde(ax2, self.models.gamma, 'gamma')
+        ax2.vlines(bestmodel[1], ymin=0, ymax=g_kde*1.15)
+        ax2.set_title('Gamma') 
+        ax2.set_ylabel('Density')
+        ax2.set_xticks([-180,-120,-60,0,60,120,180])
+        # ax3.hist(self.models.strength,bins=20)
+        s_kde = self.param_kde(ax3, self.models.strength, 'strength')
+        ax3.vlines(bestmodel[2], ymin=0, ymax=s_kde*1.15)
+        ax3.set_title('Strength')
+        ax3.set_ylabel('Density')
+        # ax4.hist(self.models.misfit,bins=20)
+        m_kde = self.param_kde(ax4, self.models.misfit, 'misfit')
+        ax4.vlines(bestmodel[3], ymin=0, ymax=m_kde*1.15)
+        ax4.set_title('Model Misfit')
+        ax4.set_ylabel('Density')
+        fig.suptitle(f'{title} bootstrapped KDEs')
+        plt.tight_layout()
+        plt.savefig(f'{FIG_DIR}/{fout}_bootstrap_KDE.png',dpi=400)
+        plt.show()
 if __name__ == '__main__':
     ppv = Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_model/', strmax=0.5)
-    ppv.make_section
+    ppv.plot_2d_sections(239)
