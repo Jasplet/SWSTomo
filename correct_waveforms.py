@@ -85,7 +85,7 @@ def event_relative_time(st_stats):
     eventtime = UTCDateTime(year=sacstat['nzyear'], julday=sacstat['nzjday'], hour=sacstat['nzhour'],
                             minute=sacstat['nzmin'], second=sacstat['nzsec'], microsecond=sacstat['nzmsec'])
     rel_start = startdate - eventtime
-    return rel_start
+    return rel_start, eventtime
 
 def save_pair(Pair, filename):
     '''
