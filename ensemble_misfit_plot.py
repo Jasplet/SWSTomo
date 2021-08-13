@@ -93,10 +93,60 @@ def plot_2d_views(models):
     cbar = fig.colorbar(C)
     cbar.ax.set_ylabel(r'$\Sigma (\lambda_2)$')
     return fig
+   
+def plot_2d_sections(Ensemble, ndf, fname=None):
+    '''
+    Plots 2d sections through the input models (through each axis)
+    '''
+    m = Ensemble.find_best_fitting(ret=True)
+    Ensemble.find_fcrit(ndf)
     
+    fig = plt.figure(figsize=(20, 6))
+    #make left plot (alpha v strength) - Gamma is fixed
+    sec1 = Ensemble.make_section(m[1], axis='gamma')
+    ax1 = fig.add_subplot(1, 3, 1)
+    ax1.scatter(x=sec1.strength, y=sec1.alpha, c=sec1.misfit, cmap='magma_r',vmin=m[3], vmax=1)
+    ax1.set_xlabel('Strength')
+    ax1.set_ylabel(r'Alpha ($\degree$)')
+    ax1.set_title(f'2D section through gamma = {m[1]:5.3f}')
+                
+    # make middle plot (gamma v strength )
+    sec2 = Ensemble.make_section(m[0], axis='alpha')
+    ax2 = fig.add_subplot(1, 3, 2)
+    ax2.scatter(x=sec2.strength, y=sec2.gamma, c=sec2.misfit, cmap='magma_r',vmin=m[3], vmax=1)
+    ax2.set_xlabel('Strength')
+    ax2.set_ylabel(r'Gamma ($\degree$)')
+    ax2.set_title(f'2D section through alpha = {m[0]:5.3f}')
+    
+    #make right plot (alpha v gamma)
+    sec3 = Ensemble.make_section(m[2], axis='strength')
+    ax3 = fig.add_subplot(1, 3, 3)
+    C = ax3.scatter(x=sec3.alpha, y=sec3.gamma, c=sec3.misfit, cmap='magma_r',vmin=m[3], vmax=1)
+    ax3.set_xlabel(r'Alpha ($\degree$)')
+    ax3.set_ylabel(r'Gamma ($\degree$)')
+    ax3.set_title(f'2D section through strength = {m[2]:5.3f}')
+    
+    #Add model we are slicing through to each section
+    ax1.plot(m[2], m[0], marker='x', color='red')
+    ax2.plot(m[2], m[1], marker='x', color='red')
+    ax3.plot(m[0], m[1], marker='x', color='red')
+    fig.suptitle('2-D sections through model space, intersecting at best fitting model (+/- 0.1%)',
+                 fontsize=14)
+    fig.colorbar(C, ax=ax3)
+    ax1.set_xlim([Ensemble.model_config['strength_min'], Ensemble.model_config['strength_max']])
+    ax1.set_ylim([Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max']])
+    ax2.set_xlim([Ensemble.model_config['strength_min'], Ensemble.model_config['strength_max']])
+    ax2.set_ylim([Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']])
+    ax3.set_xlim([Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max']])
+    ax3.set_ylim([Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']])
+    if fname:
+        plt.savefig(f'{FIG_DIR}/{fname}')
+    else:
+        plt.show() 
 
 if __name__ == '__main__':
     
-    Ensemble = EnsembleVisualiser.Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/')
-    m = Ensemble.find_best_fitting(ret=True)
-    plot_2d_sections(Ensemble.models, m)
+    E = EnsembleVisualiser.Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/Creasy_tensors/ppv2/SimpleShear_100',
+                                           strmax=1)
+    m = E.find_best_fitting(ret=True)
+    plot_2d_sections(E, m)
