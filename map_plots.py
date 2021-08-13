@@ -17,7 +17,7 @@ from pathset import find_phases_in_domain
 from sphe_trig import vincenty_dist
 
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
-
+THESIS_FIGS = '/Users/ja17375/Thesis-enclosing/Thesis/chapters/chapter02/Figs'
 def map_data_at_station(phasefile,station,extent=[-150,-100,30,70],save=False):
     '''
     This function maps all the phases recorded at a given station. 
@@ -166,12 +166,7 @@ def map_data_paths(data, show_pp=False, add_tomo=False, fname=None):
                 projection='B195/25/10/50/15c', frame=['a20','WESn'])
     
     if add_tomo:
-        cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
-        s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
-        fig.grdimage(grid=s40rts, cmap=cpt)
-        fig.colorbar(cmap=cpt,
-                position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
-                frame=['a1f0.5g0.25','x+l"dVs (%)"'])
+        add_s40rts(figs)
     
     fig.coast(shorelines='1/0.5p,black', resolution='l')
     for i, row in lqdata.iterrows():
@@ -192,8 +187,18 @@ def map_data_paths(data, show_pp=False, add_tomo=False, fname=None):
         fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
     else:
         fig.show(method='external')
-    
-def map_s40rts(region=[-170,-80,10,60]):
+ 
+def add_s40rts(fig):
+    ''' adds s40rts tomography and cpt to a PyGMT fig'''
+    cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
+    s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
+    fig.grdimage(grid=s40rts, cmap=cpt)
+    fig.colorbar(cmap=cpt,
+            position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
+            frame=['a1f0.5g0.25','x+l"dVs (%)"'])
+    return fig
+ 
+def map_s40rts(region=[0,360,-80,80]):
     '''
     Maps the tomography model S40RTS
 
@@ -202,16 +207,16 @@ def map_s40rts(region=[-170,-80,10,60]):
     Using pyGMT in place of Cartopy
     '''
     fig = pygmt.Figure()
-    fig.basemap(region=region, projection='M12c', frame='a10')  
+    fig.basemap(region='g', projection='Kf20c', frame='afg')  
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
     s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
     fig.grdimage(grid=s40rts, cmap=cpt)
-    fig.coast(shorelines='0.5p,black', resolution='l')
+    fig.coast(shorelines='0.5p,black', resolution='c')
     fig.colorbar(cmap=cpt,
         position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
         frame=['a1f0.5g0.25','x+l"dVs (%)"'])
-    fig.savefig(f'{FIG_DIR}/E_pac_blank_S40RTS.png',crop=True, show=True)
-    # fig.show(method='external')
+    #fig.savefig(f'{FIG_DIR}/E_pac_blank_S40RTS.png',crop=True, show=True)
+    fig.show(method='external')
 
 def map_sks_corrections(data):
     '''
@@ -241,8 +246,31 @@ def map_sks_corrections(data):
     fig.text(x=-125, y=27.6, text='1 s')
     fig.show(method='external')
 
+def global_phase_map(data, fname=None):
+    
+    fig = pygmt.Figure()
+    fig.basemap(region="g",
+                projection='ks12c', frame=['a20','WESn'])
+        
+   # fig.coast(shorelines='1/0.5p,black', resolution='l')
+    
+    fig.plot(x=data.EVLO, y=data.EVLA, style='a0.25c', color='yellow', pen='0.5p,black')
+    fig.plot(x=data.STLO, y=data.STLA, style='i0.25c', color='red', pen='0.5p,black')
+   
+    scs = data[data.PHASE == 'ScS']
+    sks = data[data.PHASE == 'SKS']
+    skks = data[data.PHASE == 'SKKS']
+
+    fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.2c', color='darkred', pen='1p,black')
+    fig.plot(x=sks.LOWMM_LON, y=sks.LOWMM_LAT, style='c0.2c', color='green', pen='1p,black')
+    fig.plot(x=skks.LOWMM_LON, y=skks.LOWMM_LAT, style='c0.2c', color='orange', pen='1p,black')
+    if fname:
+        fig.savefig(f'{FIG_DIR}/{fname}.png')
+    else:
+        fig.show()
+
 if __name__ == '__main__':
-    phasefile = 'E_pacific_all_phases.sdb'
+    phasefile = 'All_phases.sdb'
     date_time_conv = {'TIME': lambda x: str(x),
                       'DATE': lambda x: str(x)}
     filepath = f'/Users/ja17375/SWSTomo/Inversions/{phasefile}'
@@ -251,11 +279,11 @@ if __name__ == '__main__':
     clon = -140.
     crit = 4.
     idx = []
-    for i, row in data.iterrows():
-        if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
-            idx.append(i)
-    data2plot = data.iloc[idx]
+    # for i, row in data.iterrows():
+    #     if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
+    #         idx.append(i)
+    # data2plot = data.iloc[idx]
                           
     # map_data_paths(data2plot, show_pp=True, add_tomo=True, fname='data_paths_summary')
    # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
-    map_sks_corrections(data2plot)
+    global_phase_map(data)
