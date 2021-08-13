@@ -169,7 +169,7 @@ def draw_tri_patch(ax, doms2plot, counts, cmin):
     
     return tps
     
-def counts_heatmap(cfile,extent=[-180,-70,0,70],cmin=5):
+def counts_heatmap(cfile,bins='T3_global.bin', extent=[-180,180,-90,90],cmin=5):
     '''
     This is a function to make a heatmap showing our coverage. Each trigonal domain is coloured based off the number of phases that pass through it
     
@@ -184,7 +184,7 @@ def counts_heatmap(cfile,extent=[-180,-70,0,70],cmin=5):
        fig [figure] - a 2 panel figure showing ScS and SnKS coverage in D'' and the Upper Mantle (reciever side)
     '''
     
-    domains = np.loadtxt('T3_global.bins',skiprows=1)
+    domains = np.loadtxt(bins,skiprows=1)
     counts = np.loadtxt(cfile)
     doms2plot = domains[np.isin(domains[:,0],counts[:,0])]
     fig = plt.figure(figsize=(12,12))
@@ -213,7 +213,7 @@ def counts_heatmap(cfile,extent=[-180,-70,0,70],cmin=5):
     tps2.set_clim([10,ldom_counts.max()])
     fig.colorbar(tps, ax=ax2)
     ax2.set_title(r"Coverage of SKS, SKKS and ScS phases in Upper Mantle (Receiver Side)")
-    plt.savefig('../Figures/E_pacific_phasecount_heatmap',format='png', dpi=500)
+    plt.savefig('Global_phasecount_heatmap',format='png', dpi=500)
 
 def map_T3_doms(domfile='T3_global.bins', extent=[-170,-60,0,70]):
     '''
