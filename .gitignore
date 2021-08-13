@@ -4,3 +4,15 @@
 *.xml
 *.counts
 *.png
+*.bins
+*.yx
+*.m
+*.cpt
+evt.2016-12-18/
+gmt.history
+Matlab/
+__pycache__/
+.DS_Store
+.ipynb_checkpoints
+.ps
+.cache
