@@ -3,7 +3,7 @@ from xml.etree import ElementTree
 from shutil import copy
 from obspy.signal.rotate import rotate2zne
 
-def get_mts(fileID,stat,phase):
+def get_mts(fileID,stat,phase, syn=False):
     '''Function to get the .mts file for a phase and read in the xml.
 
         Args:
@@ -18,11 +18,17 @@ def get_mts(fileID,stat,phase):
             >>> Set.get_mts('SKS')
 
     '''
-    if phase == 'ScS':
-        path = '/Users/ja17375/SWSTomo/ScS_data'
+    if syn:
+        mts = '{}.mts'.format(fileID)
     else:
-        path = '/Users/ja17375/SWSTomo/SnKS_data'
-    mts = '{}/{}/{}/{}.mts'.format(path,stat,phase,fileID)
+        if phase == 'ScS':
+            path = '/Users/ja17375/SWSTomo/ScS_data'
+            
+        else:
+            path = '/Users/ja17375/SWSTomo/SnKS_data'
+            
+        mts = '{}/{}/{}/{}.mts'.format(path,stat,phase,fileID)
+        
     xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
     data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                  # the bigger Pathset XML file
@@ -34,7 +40,7 @@ def get_mts(fileID,stat,phase):
 
     return data
 
-def get_sac(fileID,stat,phase):
+def get_sac(fileID,stat,phase, syn=False):
     '''Function to copy data to the local data directory "data" if it is not already there (mainly useful for test/first runs).
 
        Args:
@@ -52,16 +58,23 @@ def get_sac(fileID,stat,phase):
             # print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(fileID,comp))
             pass
         else:
-            # print('File not found, copying from Sheba Run Dir E_pacific if possible')
-            if phase == 'ScS':
-                path = '/Users/ja17375/SWSTomo/ScS_data'
+            # print('File not found, copying from Sheba Run Dir E_pacific if possible')     
+            if syn:
+                file = f'{fileID}.BH{comp}'
+                stem = '/'.join(fileID.split('/')[-3:-1])
+                f = fileID.split('/')[-1]
+                dst = '/Users/ja17375/SWSTomo/Inversions/SynthTests/{}/data/{}.BH{}'.format(stem,f,comp)
+                print(f'Copy synthetic data {file}')
             else:
-                path = '/Users/ja17375/SWSTomo/SnKS_data'
-
-            file = '{}/{}/{}/{}.BH{}'.format(path,stat,phase,fileID,comp)
-            dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)
-            p = copy(file, dst)
-            
+                dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)
+                if phase == 'ScS':
+                    path = '/Users/ja17375/SWSTomo/ScS_data'
+                else:
+                    path = '/Users/ja17375/SWSTomo/SnKS_data'
+                file = '{}/{}/{}/{}.BH{}'.format(path,stat,phase,fileID,comp)
+                    
+            _ = copy(file, dst)
+        
 def rotate_traces(st):
     '''
     Function to rotate an obspy stream (assuming a SAC file read in) to ZNE using rotate2zne
