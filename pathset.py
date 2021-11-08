@@ -24,11 +24,14 @@ __version__ = "0.1"
 __email__ = "joseph.asplet@bristol.ac.uk"
 __status__ = "Development"
 
+# Set XML namespace as global varaible
+self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
+
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
     to parse/generate the XML needed for the PathSet file
     """
-    def __init__(self,phasefile, domains=None,model=None,odir=None,config_uid='Test Run'):
+    def __init__(self,phasefile, model,odir=None,config_uid='Test Run'):
         '''
         Initialise Pathsetter with some essential data, metadata. 
 
@@ -52,10 +55,6 @@ class PathSetter:
         self.date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
         self.df = pd.read_csv(phasefile,converters=self.date_time_convert,delim_whitespace=True)
         print('Read Trigonal Domians file')
-        if domains:
-            self.doms = pd.read_csv(domains,delim_whitespace=True).sort_values(by='BIN')
-        else:
-            print('Not using trigonal bins')
         print('Set Outdir')
         if odir == None:
             self.opath = os.getcwd() # Gets current working directory and stores is as a Path
@@ -64,19 +63,13 @@ class PathSetter:
             self.opath = odir
             self.odir = odir.split('/')[-1]
         else:
-            self.opath = '/Users/ja17375/SWSTomo/BlueCrystal/{}'.format(odir)
-            self.odir = odir
-        # Set XML namespace
-        self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
-        if model == None:
-            print('Model will need to be generated before Pathsetting can be done')
-        else:
-            print("Reading Model file from SWSTomo/Models")
-            self.modelxml = '/Users/ja17375/Projects/Matisse_Synthetics/Models/{}'.format(model)
-            self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
-            self.model = self.modelroot.find('mtsML:model',self.xmlns)
-            model_name = self.model[0].text
-            print('Using model named ... {}'.format(model_name))
+            raise ValueError('Output directory/path required')      
+        print(f"Reading Model file {model}")
+        self.modelxml = '{}'.format(model)
+        self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
+        self.model = self.modelroot.find('mtsML:model',self.xmlns)
+        model_name = self.model[0].text
+        print('Using model named ... {}'.format(model_name))
         # Set config uID
         self.config_uid = config_uid
 
@@ -313,68 +306,6 @@ class PathSetter:
         #Now write out the Pathset XML
         self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
-    def gen_synth_PathSet(self,lower_dom_no=None, fname=None, syntest='RealBAZ/Noise01'):
-        '''
-        Function to iterate over the shear-wave phase data provided to Setter and to generate the correct XML
-        to from the Pathset XML file required for Matisse. This includes adding source/ reciever side corrections
-        where required (and where the neccesary corrections have been provided as needed by functions called
-                        by gen_PathSet_XML)
-        This funciton is written assuming there is a singular D'' domain to invert for 
-        
-        Args:
-            stations [list] - list of stations to include data for
-            lower_dom_no [int or list] - lower domain of interest
-            phases [list] - list of phase codes to iterate over. Default is ['ScS','SKS','SKKS']
-            fname [str] - File name to write the Pathset XML to. If no name is provided then this defaults to 'Pathset'
-        Returns:
-            Output XML is written to fname
-        '''
-        # Some quick i/o management
-        if fname == None:
-            self.pathset_xml = 'Pathset' 
-        else:
-            self.pathset_xml = fname
-        
-        #Start of main function
-        self.pathset_root = ElementTree.Element('MatisseML')
-        tree = ElementTree.ElementTree(self.pathset_root)
-        self.pathset_root.set("xmlns",self.xmlns['mtsML'])
-        pathset = ElementTree.SubElement(self.pathset_root,'pathset')
-        psuid = 'Paths for run in dir {} .'.format(self.odir)
-        pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
-        pathset_uid.text = psuid
-                # Before Pathsetting, parse the upper/lower domains from the model file
-        _ = self.parsedoms()
-        for i, row in self.df.iterrows():
-            # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.GCARC,'evla':row.EVLA,
-                            'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,
-                            'date':row.DATE,'time':row.TIME,
-                            'phase' :row.PHASE, 'station':row.STAT}
-            filepath = f'/Users/ja17375/Projects/Matisse_Synthetics/{syntest}/run'
-            filestem = f'{attribs["station"]}_synth_{attribs["phase"]}'
-            fileID = f'{filepath}/{filestem}'
-
-            ldom_id = 'Lower_{}'.format(lower_dom_no)
-            lowmm_op = self.domain2operator(ldom_id,attribs['phase'],attribs['evdp'],
-                                   attribs['gcarc'],row.LOWMM_AZI)
-            # Now make XML for this Path
-            path = ElementTree.SubElement(pathset,'path')
-            pathname = 'Path Syn {}'.format(attribs['station'])          
-            path_uid = ElementTree.SubElement(path,'path_uid')
-            path_uid.text = pathname
-            # Add Data (from .mts)
-            data = get_mts(fileID,attribs['station'],attribs['phase'], syn=True)
-            path.append(data)
-            stat_uid = ElementTree.SubElement(path,'station_uid')
-            stat_uid.text = attribs['station']
-            evt_uid = ElementTree.SubElement(path,'event_uid')
-            evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])          
-            # Add D`` Operator
-            path.append(lowmm_op) 
-
-        #Now write out the Pathset XML
-        self._write_pretty_xml(self.pathset_root,file='{}/{}.xml'.format(self.opath,self.pathset_xml))
 
     def set_filepaths(self,attribs):
         '''Set filepaths to datasets for different phases
@@ -388,56 +319,56 @@ class PathSetter:
                 attribs['phase'],attribs['stat'],attribs['date'],attribs['time'],attribs['phase'])        
         return f 
 
-    def gen_Model_XML(self, stations, mod_name=None, Low_Domains=None, ):
-        '''
-        Generates the model XML file required by matisse, with lowermost mantle domains and seperate upper mantle domains for every station requested. Source Side corrections for ScS are auto-added
+def gen_Model_XML(stations, mod_name=None, Low_Domains=None, ):
+    '''
+    Generates the model XML file required by matisse, with lowermost mantle domains and seperate upper mantle domains for every station requested. Source Side corrections for ScS are auto-added
+    
+    Args:
+        stations (list) - list of all Stations to create domains for. 
+        mod_name (str) - name of the model. The model XML will be written to a file mod_name.xml
+        Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none we assume this is a single domain run 
+    Returns:
+        model XML written to the file mod_name.xml
+    '''
+    if mod_name is None:
+        mod_name = input('No model name provided. Enter one now :')
+    modpath = '/Users/ja17375/Projects/Matisse_Synthetics/Models'
+    # Write the initial xml
+    root = ElementTree.Element('MatisseML')
+    tree = ElementTree.ElementTree(root)
+    root.set("xmlns",self.xmlns['mtsML'])
+    root.append(ElementTree.Comment('Generated by gen_Model from pathset.py'))
+    m = ElementTree.SubElement(root,'model')
+    m_uid = ElementTree.SubElement(m,'model_uid')
+    m_uid.text = 'Trigonal Domains'
+    
+    if Low_Domains is None:
+        print('No Lowermost Mantle Domains')
+    
+    if stations == 'all':
+        stations =  self.df.STAT.values
+    
+    for stat in stations:
+        dom = add_station_correction(stat)
+        m.append(dom)
         
-        Args:
-            stations (lsit) - list of all Stations to create domains for. 
-            mod_name (str) - name of the model. The model XML will be written to a file mod_name.xml
-            Low_Domains (array-like) - [optional] array of D`` domains to use in model. If none we assume this is a single domain run 
-        Returns:
-            model XML written to the file mod_name.xml
-        '''
-        if mod_name is None:
-            mod_name = input('No model name provided. Enter one now :')
-        modpath = '/Users/ja17375/Projects/Matisse_Synthetics/Models'
-        # Write the initial xml
-        root = ElementTree.Element('MatisseML')
-        tree = ElementTree.ElementTree(root)
-        root.set("xmlns",self.xmlns['mtsML'])
-        root.append(ElementTree.Comment('Generated by gen_Model from pathset.py'))
-        m = ElementTree.SubElement(root,'model')
-        m_uid = ElementTree.SubElement(m,'model_uid')
-        m_uid.text = 'Trigonal Domains'
-        
-        if Low_Domains is None:
-            print('No Lowermost Mantle Domains')
-        
-        if stations == 'all':
-            stations =  self.df.STAT.values
-        
-        for stat in stations:
-            dom = add_station_correction(stat)
-            m.append(dom)
+    for i,row in self.df.iterrows():
+        if (row.STAT in stations) & (row.PHASE == 'ScS'):
+            date, time, stat = row.DATE, row.TIME, row.STAT
+            print(f'{date}, {time}, {stat}')
+            sdom = add_sside_correction(date, time, stat)
+            m.append(sdom)
             
-        for i,row in self.df.iterrows():
-            if (row.STAT in stations) & (row.PHASE == 'ScS'):
-                date, time, stat = row.DATE, row.TIME, row.STAT
-                print(f'{date}, {time}, {stat}')
-                sdom = add_sside_correction(date, time, stat)
-                m.append(sdom)
-                
-        if Low_Domains:
-            for ldom in Low_Domains:
-                # Loop over requested lower domains
-                print(ldom)
-                dom = bin2domain(f'Lower_{ldom}')
-                m.append(dom)
+    if Low_Domains:
+        for ldom in Low_Domains:
+            # Loop over requested lower domains
+            print(ldom)
+            dom = bin2domain(f'Lower_{ldom}')
+            m.append(dom)
 
-        print('Model Generated')
-        self.model = m
-        self._write_pretty_xml(root,file='{}/{}.xml'.format(modpath,mod_name))        
+    print('Model Generated')
+    self.model = m
+    self._write_pretty_xml(root,file='{}/{}.xml'.format(modpath,mod_name))        
         
     def count_paths_in_model(self,Low_Domains=None,Rside_Domains=None):
         '''
