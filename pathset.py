@@ -72,7 +72,7 @@ class PathSetter:
             print('Model will need to be generated before Pathsetting can be done')
         else:
             print("Reading Model file from SWSTomo/Models")
-            self.modelxml = '/Users/ja17375/SWSTomo/Models/{}'.format(model)
+            self.modelxml = '/Users/ja17375/Projects/Matisse_Synthetics/Models/{}'.format(model)
             self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
             self.model = self.modelroot.find('mtsML:model',self.xmlns)
             model_name = self.model[0].text
@@ -284,7 +284,7 @@ class PathSetter:
                                                  attribs['date'],attribs['time'])
                 sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],
                                                 attribs['gcarc'],0)    
-            _, lmm_azi = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, row.STLA, row.STLO)
+            _ , lmm_azi = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, row.STLA, row.STLO)
             ldom_id = 'Lower_{}'.format(lower_dom_no)
             lowmm_op = self.domain2operator(ldom_id,attribs['phase'],attribs['evdp'],
                                    attribs['gcarc'],lmm_azi)
@@ -347,23 +347,17 @@ class PathSetter:
         _ = self.parsedoms()
         for i, row in self.df.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
+            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.GCARC,'evla':row.EVLA,
                             'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,
-                            'date':row.DATE,'time':row.TIME,'stat':row.STAT,
+                            'date':row.DATE,'time':row.TIME,
                             'phase' :row.PHASE, 'station':row.STAT}
-            filepath = f'/Users/ja17375/DiscrePy/Sheba/Runs/SYNTH/InversionSYNTH/{syntest}'
-            try:
-                test = '{}/{}*.mts'.format(filepath, attribs['station'])
-                filestem = glob.glob(test)[0].strip('.mts').split('/')[-1]
-                fileID = f'{filepath}/{filestem}'
-                # Strip out .mts and split by '/', select end to get filestem
-            except IndexError:
-                continue
+            filepath = f'/Users/ja17375/Projects/Matisse_Synthetics/{syntest}/run'
+            filestem = f'{attribs["station"]}_synth_{attribs["phase"]}'
+            fileID = f'{filepath}/{filestem}'
+
             ldom_id = 'Lower_{}'.format(lower_dom_no)
             lowmm_op = self.domain2operator(ldom_id,attribs['phase'],attribs['evdp'],
-                                   attribs['gcarc'],attribs['azi'])
-
-            get_sac(fileID,attribs['stat'],attribs['phase'], syn=True)
+                                   attribs['gcarc'],row.LOWMM_AZI)
             # Now make XML for this Path
             path = ElementTree.SubElement(pathset,'path')
             pathname = 'Path Syn {}'.format(attribs['station'])          
@@ -373,7 +367,7 @@ class PathSetter:
             data = get_mts(fileID,attribs['station'],attribs['phase'], syn=True)
             path.append(data)
             stat_uid = ElementTree.SubElement(path,'station_uid')
-            stat_uid.text = attribs['stat']
+            stat_uid.text = attribs['station']
             evt_uid = ElementTree.SubElement(path,'event_uid')
             evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])          
             # Add D`` Operator
@@ -407,7 +401,7 @@ class PathSetter:
         '''
         if mod_name is None:
             mod_name = input('No model name provided. Enter one now :')
-        modpath = '/Users/ja17375/SWSTomo/Models'
+        modpath = '/Users/ja17375/Projects/Matisse_Synthetics/Models'
         # Write the initial xml
         root = ElementTree.Element('MatisseML')
         tree = ElementTree.ElementTree(root)
@@ -663,17 +657,12 @@ def split_by_stats(phasefile, stats):
     print('Done')
 
 if __name__ == '__main__':
-  # Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
-    # odir='/Users/ja17375/SWSTomo/Inversions/EP_fast_anom/')
-    # Set.gen_Model_XML(stations='all', mod_name='EP_fast_anom_Model', Low_Domains=['fast_anom'])
+    Set = PathSetter(phasefile='/Users/ja17375/Projects/Matisse_Synthetics/ppv1/ideal/ppv1_ideal_synthetics_processed.sdb',
+                      odir='/Users/ja17375/Projects/Matisse_Synthetics/')
     # Make Pathsets for Epac Data
-    # Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
-    # odir='/Users/ja17375/SWSTomo/Inversions/', model='EP_fast_anom_Model.xml')
-    # Set.gen_PathSet_XML(stations='all',lower_dom_no='fast_anom',
-    #                     phases=['ScS','SKS','SKKS'],fname='EP_fast_anom_Paths')
-    # Make Pathsets for synthetics
-    SynSet = PathSetter(
-        phasefile='/Users/ja17375/SWSTomo/Inversions/SynthTests/RealBAZ/ppv1_real_noise10_SYNTH_sheba_results.sdb',
-        odir='/Users/ja17375/SWSTomo/Inversions/SynthTests/RealBAZ/Noise10', model='Synth_Model.xml')
-    SynSet.gen_synth_PathSet(lower_dom_no='fast_anom', syntest='RealBAZ/Noise10',fname='Synth_Pathset')
+    Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
+    odir='/Users/ja17375/SWSTomo/Inversions/', model='EP_fast_anom_Model.xml')
+    Set.gen_PathSet_XML(stations='all',lower_dom_no='fast_anom',
+                        phases=['ScS','SKS','SKKS'],fname='EP_fast_anom_Paths')
+
     

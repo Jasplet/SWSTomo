@@ -12,6 +12,7 @@ from scipy import stats
 import numpy as np
 import matplotlib.pyplot as plt
 from EnsembleVisualiser import Ensemble
+from plot_bootstraps import add_kde
 
 PATH = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/Bootstrapping'
 
@@ -59,7 +60,7 @@ def plot_candidates(param='misfit'):
         cand_bestfit = bestfits[i]
         ax = axs.ravel()[i]
         
-        plot_kde(ax, cand, param)
+        add_kde(ax, cand, param)
         ax.vlines(cand_bestfit, ymin=0, ymax=ymax[i], colors='red')
         ax.set_title(titles[i])
         print(titles[i])
@@ -76,37 +77,6 @@ def plot_candidates(param='misfit'):
     plt.savefig(f'/Users/ja17375/SWSTomo/Figures/Candidate_models_bootstrapped_{param}.png', dpi=400)
     plt.show()
 
-def plot_kde(ax, cand, param):
-    '''Make a KDE plot for input values. 
-    Which model parameter (alpha, gamma, strength, misfit) is determined by param'''
-    if param == 'alpha':
-        x = np.linspace(0, 90, 1000)
-        lim = [0, 90]
-    elif param == 'gamma':
-        x = np.linspace(-180, 180, 2000)
-        lim=[-180, 180]
-    elif param == 'strength':
-        x = np.linspace(0, cand.config['strength_max'], 1000)
-        lim=[0, cand.config['strength_max']]
-    elif param == 'misfit':
-        x = np.linspace(0, 1.5, 1000)
-        lim=[0, 0.8]
-    values = cand.models[param]
-    kde = stats.gaussian_kde(values)
-    y = kde(x)
-    # ymax = np.ceil(y.max())
-    ax.plot(x, y, 'k')
-
-    sig_min = values.mean()-values.std()
-    sig_max = values.mean()+values.std()
-    sig_x = np.linspace(sig_min, sig_max, 200)
-    ax.fill_between(sig_x, 0, kde(sig_x), alpha=0.5)
-    ax.vlines(values.mean(), ymin=0, ymax=250,colors='k')
-    ax.set_xlim(lim)
-    
-def strength_kde(ax, strength):
-    ''' Make KDE for bootstrapped strength param'''
-    
 if __name__ == '__main__':
     
     # outdir = f'{PATH}/Pathsets'

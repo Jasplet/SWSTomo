@@ -3,7 +3,7 @@ from xml.etree import ElementTree
 from shutil import copy
 from obspy.signal.rotate import rotate2zne
 
-def get_mts(fileID,stat,phase, syn=False):
+def get_mts(fileID,stat=None,phase=None, syn=False):
     '''Function to get the .mts file for a phase and read in the xml.
 
         Args:
@@ -61,9 +61,8 @@ def get_sac(fileID,stat,phase, syn=False):
             # print('File not found, copying from Sheba Run Dir E_pacific if possible')     
             if syn:
                 file = f'{fileID}.BH{comp}'
-                stem = '/'.join(fileID.split('/')[-3:-1])
                 f = fileID.split('/')[-1]
-                dst = '/Users/ja17375/SWSTomo/Inversions/SynthTests/{}/data/{}.BH{}'.format(stem,f,comp)
+                dst = '/Users/ja17375/Projects/Matisse_Synthetics/data/{}.BH{}'.format(f,comp)
                 print(f'Copy synthetic data {file}')
             else:
                 dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)

@@ -8,7 +8,7 @@ Created on Wed Feb 10 16:23:29 2021
 import matplotlib.pyplot as plt
 import numpy as np 
 import EnsembleVisualiser
-FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
+FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures'
 
 def plot_nbest_models(Ensemble, n, full_range=False):
     

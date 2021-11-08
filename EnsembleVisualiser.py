@@ -14,6 +14,15 @@ from l2stats import ftest
 FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
 
 
+def restore_params(param, p_min, p_max):
+    ''' 
+    Restores true value of parameters in each model from their normalised state 
+    '''
+    p_range = p_max - p_min 
+    true_params = p_min + (p_range * param)
+    
+    return true_params
+
 class Ensemble:
     '''
     Ensemble of models produced by Matisse for a domain
@@ -32,11 +41,11 @@ class Ensemble:
         if read:
             raw_ensemble = self.read_ensemble(rundir,fname)
             if dims == 'ags':
-                alpha = self.restore_params(raw_ensemble[:,0],
+                alpha = restore_params(raw_ensemble[:,0],
                                     self.config['alpha_min'], self.config['alpha_max'])
-                gamma = self.restore_params(raw_ensemble[:,1],
+                gamma = restore_params(raw_ensemble[:,1],
                                     self.config['gamma_min'], self.config['gamma_max'])
-                strength = self.restore_params(raw_ensemble[:,2],
+                strength = restore_params(raw_ensemble[:,2],
                                     self.config['strength_min'], self.config['strength_max'])
                 # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
                 # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
@@ -85,14 +94,7 @@ class Ensemble:
         
         return raw_ensemble
 
-    def restore_params(self, param, p_min, p_max):
-        ''' 
-        Restores true value of parameters in each model from their normalised state 
-        '''
-        p_range = p_max - p_min 
-        true_params = p_min + (p_range * param)
-        
-        return true_params
+
 
     def find_fcrit(self, ndf):
         '''Find the f-test 95% confidence value  
@@ -179,7 +181,32 @@ class Ensemble:
                                          self.config['gamma_max'],self.nsamps)
         self.strength_samples = np.linspace(self.config['strength_min'],
                                             self.config['strength_max'],self.nsamps)
-      
+     
+    def make_section(self, value, axis):
+        '''
+    
+        '''
+        if axis not in ['alpha', 'gamma', 'strength']:
+            raise ValueError(f'Axis {axis} undefined')
+        elif axis == 'alpha':
+            cols = ['gamma', 'strength', 'misfit']
+            assert np.less_equal(value, self.model_config['alpha_max'])
+            assert np.greater_equal(value, self.model_config['alpha_min'])
+        elif axis == 'gamma':
+            cols = ['alpha', 'strength', 'misfit']
+            assert np.less_equal(value, self.model_config['gamma_max'])
+            assert np.greater_equal(value, self.model_config['gamma_min'])
+        elif axis == 'strength':
+            cols = ['alpha', 'gamma', 'misfit']
+            assert np.less_equal(value, self.model_config['strength_max'])
+            assert np.greater_equal(value, 0)
+
+        slc = self.models[(np.isclose(self.models[axis], value, rtol=1.e-2)) & (self.models['misfit'] <= 1)]
+        section = slc[cols]
+
+
+        return section     
+        
     def save_3d_pdf(self, outfile):
         ''' Saves 3-D PDF as Numpy Array'''
         np.save(f'{self.rundir}/{outfile}', self.pdf_3d)

@@ -49,24 +49,24 @@ while read file; do
     echo $file
     if [ $i -gt 1 ]
     then
-	    call_sacsplitwave $(echo $file | awk '{print $15, $16}' ) $SPOL `echo "scale=2;$NOISE_LVL/100" | bc `
+	    call_sacsplitwave $(echo $file | awk '{print $18, $19}' ) $SPOL `echo "scale=2;$NOISE_LVL/100" | bc `
  	stat=`echo $file | awk '{print $1}'`
  	date=`echo $file | awk '{print $2}'`
  	time=`echo $file | awk '{print $3}'`
+  ph=`echo $file | awk '{print $4}'`
  	path=`pwd`
- 	mv SWAV.BHE ${stat}_${date}_${time}.BHE
-    mv SWAV.BHN ${stat}_${date}_${time}.BHN
-    mv SWAV.BHZ ${stat}_${date}_${time}.BHZ
+
+  for cmp in E N Z
+  do
+   	mv SWAV.BH${cmp} ${path}/data/${stat}_synth_${ph}.BH${cmp}
     # Alter station name, Date
-    sacsethdr kstnm ${stat} ${stat}_${date}_${time}.BH[E,N,Z]
-    sacsethdr nzyear `echo ${date} | cut -c 1-4` ${stat}_${date}_${time}.BH[E,N,Z]
-    sacsethdr kcmpnm BHE ${stat}_${date}_${time}.BHE
-    sacsethdr kcmpnm BHN ${stat}_${date}_${time}.BHN
-    sacsethdr kcmpnm BHZ ${stat}_${date}_${time}.BHZ
-    # sacsethdr nztime 12${snr} SP${SPOL}_${k}001_120000.BH[E,N,Z]
-    echo "${path}/${stat}_${date}_${time}" | cat >> Inversion_synthetics_noise_${NOISE_LVL}.events
-  	else
-    echo 'Skipping Header Line'
-    fi
-    let i=i+1
+    sacsethdr kstnm ${stat} ${path}/data/${stat}_synth_${ph}.BH${cmp}
+    sacsethdr nzyear `echo ${date} | cut -c 1-4` ${stat}_synth_${ph}.BH${cmp}
+    sacsethdr kcmpnm BH${cmp} ${stat}_synth_${ph}.BH${cmp}
+  # sacsethdr nztime 12${snr} SP${SPOL}_${k}001_120000.BH[E,N,Z]
+  echo "${path}/${stat}_synth_${ph}" | cat >> Inversion_synthetics_noise_${NOISE_LVL}.events
+	else
+  echo 'Skipping Header Line'
+  fi
+  let i=i+1
 done < $SDB
