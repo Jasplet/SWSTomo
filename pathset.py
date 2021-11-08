@@ -25,7 +25,7 @@ __email__ = "joseph.asplet@bristol.ac.uk"
 __status__ = "Development"
 
 # Set XML namespace as global varaible
-self.xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
+xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
 
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
@@ -67,7 +67,7 @@ class PathSetter:
         print(f"Reading Model file {model}")
         self.modelxml = '{}'.format(model)
         self.modelroot = ElementTree.parse('{}'.format(self.modelxml)).getroot()
-        self.model = self.modelroot.find('mtsML:model',self.xmlns)
+        self.model = self.modelroot.find('mtsML:model',xmlns)
         model_name = self.model[0].text
         print('Using model named ... {}'.format(model_name))
         # Set config uID
@@ -85,11 +85,10 @@ class PathSetter:
         Returns:
             operator (obj) - An ElementTree Strucutre conainting the operator XML
         '''
-        domains = self.model.findall('mtsML:domain',self.xmlns)
+        domains = self.model.findall('mtsML:domain',xmlns)
         uid = None
         for dom in domains:
             # Loop through domains in the model file 
-#             uid_tmp = dom.find('mtsML:domain_uid',self.xmlns).text
             uid_tmp = dom[0].text
             if domain == uid_tmp:
                 uid = uid_tmp
@@ -97,7 +96,10 @@ class PathSetter:
         
         if uid is None:
             raise ValueError('Domain {} Not Found'.format(domain))
-                 
+        
+        if phase not in ['SKS', 'SKKS']:
+            raise ValueError(f'Unsupported phase > {phase}')
+        
         if uid.split('_')[0] == 'Lower':
             # Domains starting with Lower are at CMB. So depth == 2890 km. 
             # We assume SKS, SKKS piercepoints are at this depth.
@@ -105,11 +107,7 @@ class PathSetter:
             slw = get_rayparam(evdp,gcarc,phase)
             aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
             dom_h = 250
-            if phase == 'ScS': 
-                # double distance if ScS to account for the up- and -downgoing legs
-                dist = (2*dom_h) / np.cos(np.deg2rad(aoi))
-            else:
-                dist = dom_h / np.cos(np.deg2rad(aoi))
+            dist = dom_h / np.cos(np.deg2rad(aoi))
         elif (uid.split('_')[0] in ['Upper','RSide','Station','SSide']):
             # These prefixes should be used for correction domians.
             aoi = 0 
@@ -129,10 +127,52 @@ class PathSetter:
         l.text = str(np.around(dist,decimals=3))
         return operator
     
-    def add_correction_domain(domain):
-        '''Adds a static correction domain for upper mantle anisotropy '''
+    def configure_stat_corr_operator(row):
+        station_corr = ElementTree.Element('operator')
+        dom_uid = ElementTree.SubElement(station_corr,'domain_uid')
+        dom_uid.text = f'Station {row.STAT}'
+        azimuth = ElementTree.SubElement(station_corr,'azi')
+        azimuth.text = str(row.AZI)
+        inclination = ElementTree.SubElement(operator,'inc')
+        inclination.text = "90" # Inclination is 90 for corrections
+        l = ElementTree.SubElement(operator,'dist')
+        l.text = "100"
+        return station_corr
+    
+    def configure_scs_operators(row, direction, dom_id):
+        '''Handles the (slightly more involved) process of setting up ScS. 
+        Downgoing leg should be applied first with a negative aoi. This is because
+        a positive aoi corresponds to a ray propagating up through the domain.
+        Input:
+            row (Series) - row of a DataFrame
+        '''
+        # Calculate the ray params for ScS
+        # Now there is a bit of user choice here in what angle to use. 
+        # I am going to to chose to use the incindence angle at the CMB bouncepoint.
+        depth = 2890. # Approx depth of CMB [km] 
+        slw = get_rayparam(row.EVDP,row.GCARCT,phase='ScS')
+        aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
+        dom_h = 250
+        dist = dom_h / np.cos(np.deg2rad(aoi))
+        _ , lmm_azi = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, row.STLA, row.STLO)
+        #  Downgoing ScS Limb. 
+        scs_op = ElementTree.Element('operator')
+        dom_uid = ElementTree.SubElement(scs_op,'domain_uid')
+        dom_uid.text = dom_id
+        azimuth = ElementTree.SubElement(scs_op,'azi')
+        azimuth.text = str(lmm_azi)
+        inclination = ElementTree.SubElement(scs_op,'inc')
+        if direction == 'Upgoing':
+            inc = (90 - aoi)
+        elif direction == 'Downgoing':
+            inc = (90 - aoi) * -1
+        inclination.text = str(inc) # Inclination is 90 for corrections
+        length = ElementTree.SubElement(operator,'dist')
+        dist = dom_h / np.cos(np.deg2rad(aoi))
+        length.text = str(dist)
         
-
+        return scs_op
+        
     def parsedoms(self):
         '''
         Function to parse the input model XML into lists of domains for use in other functions
@@ -146,7 +186,7 @@ class PathSetter:
         Examples:
             >>>(rdoms, ldoms, sdoms) = Set.parsedoms()
         '''
-        dml = '{{{}}}domain'.format(self.xmlns['mtsML']) 
+        dml = '{{{}}}domain'.format(xmlns['mtsML']) 
         # need the triple curly braces to get a set of braces surrounding the mtsML
         rdoms = []
         ldoms = []
@@ -241,7 +281,7 @@ class PathSetter:
         
         #Start of main function
         self.pathset_root = ElementTree.Element('MatisseML')
-        self.pathset_root.set("xmlns",self.xmlns['mtsML'])
+        self.pathset_root.set("xmlns",xmlns['mtsML'])
         pathset = ElementTree.SubElement(self.pathset_root,'pathset')
         psuid = 'Paths for run in dir {} .'.format(self.odir)
         pathset_uid = ElementTree.SubElement(pathset,'pathset_uid')
@@ -258,7 +298,7 @@ class PathSetter:
         
         for i, row in df.iterrows():
             # All XML generation must sit within this loop (function calls) so that we make sure that Az, EVDP etc. are right for the current phase
-            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.DIST,'evla':row.EVLA,
+            attribs = {'evdp':row.EVDP,'azi':row.AZI,'gcarc':row.GCARC,'evla':row.EVLA,
                             'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,
                             'date':row.DATE,'time':row.TIME,'stat':row.STAT,
                             'phase' :row.PHASE}
@@ -267,19 +307,10 @@ class PathSetter:
                 fileID = glob.glob(filepath)[0].strip('.mts').split('/')[-1]
                 # Strip out .mts and split by '/', select end to get filestem
             except IndexError:
+                Warning('Glob has failed to find anything!')
                 continue
-            statdom = 'Station_{}'.format(attribs['stat'])
-            stat_op = self.domain2operator(statdom,attribs['phase'],attribs['evdp'],
-                                               attribs['gcarc'],0)
-            if attribs['phase'] == 'ScS': # Only ScS needs source side domains
-                dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],
-                                                 attribs['date'],attribs['time'])
-                sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],
-                                                attribs['gcarc'],0)    
-            _ , lmm_azi = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, row.STLA, row.STLO)
+
             ldom_id = 'Lower_{}'.format(lower_dom_no)
-            lowmm_op = self.domain2operator(ldom_id,attribs['phase'],attribs['evdp'],
-                                   attribs['gcarc'],lmm_azi)
 
             get_sac(fileID,attribs['stat'],attribs['phase'])
             # Now make XML for this Path
@@ -295,28 +326,42 @@ class PathSetter:
             evt_uid = ElementTree.SubElement(path,'event_uid')
             evt_uid.text = '{}_{}'.format(attribs['date'],attribs['time'])
             if attribs['phase'] == 'ScS':
+            # Only ScS needs source side domains
+                dom_id = 'SSide_{}_{}_{}'.format(attribs['stat'],
+                                                 attribs['date'],attribs['time'])
+                sside_op = self.domain2operator(dom_id,'ScS',attribs['evdp'],
+                                                attribs['gcarc'],0)    
                 # Add SSide Operator to path
+                scs_dwn_op = self.configure_scs_operators(row, 'Downgoing', ldom_id)
+                scs_up_op = self.configure_scs_operators(row, 'Upgoing', ldom_id)
+                stat_op = self.configure_stat_corr_operator(row)
                 path.append(sside_op)
+                path.append(scs_dwn_op)
+                path.append(scs_up_op)
+                path.append(stat_op)
+            elif attribs['phase'] in ['SKS', 'SKKS']:
+                #Use the old way for now, maybe replace later?
+                _ , lmm_azi = vincenty_dist(row.LOWMM_LAT, row.LOWMM_LON, row.STLA, row.STLO)
+                lowmm_op = self.domain2operator(ldom_id, attribs['phase'], attribs['evdp'],
+                                                attribs['gcarc'], lmm_azi)
+                # Add D`` Operator
+                path.append(lowmm_op)
+                stat_op = self.configure_stat_corr_operator(row)
+                path.append(stat_op)
                 
-            # Add D`` Operator
-            path.append(lowmm_op) 
-            path.append(stat_op)
             p+=1
         #Now write out the Pathset XML
-        tree = ElementTree.ElementTree(root)
+        tree = ElementTree.ElementTree(self.pathset_root)
         ElementTree.indent(tree, space="\t", level=0)
+        pathset_out = f'{self.odir}/{self.pathset_xml}.xml'
         tree.write(pathset_out, encoding="utf-8")
 
     def set_filepaths(self,attribs):
         '''Set filepaths to datasets for different phases
             I need this to keep up with the sprawling sheba Runs directories for different things
         ''' 
-        if attribs['phase'] == 'ScS':
-            f = '/Users/ja17375/DiscrePy/Sheba/Runs/ScS/{}/{}/{}_{}_{}??_{}.mts'.format(
-                attribs['stat'],attribs['phase'],attribs['stat'],attribs['date'],attribs['time'],attribs['phase'])
-        else:
-            f = '/Users/ja17375/DiscrePy/Sheba/Runs/E_pacific/{}/{}/{}_{}_{}??_{}.mts'.format(attribs['stat'],
-                attribs['phase'],attribs['stat'],attribs['date'],attribs['time'],attribs['phase'])        
+        f = '/Users/ja17375/Projects/Splitting_PhD/Runs/E_pac_inv/{}/{}/{}_{}_{}??_{}.mts'.format(attribs['stat'],
+            attribs['phase'],attribs['stat'],attribs['date'],attribs['time'],attribs['phase'])        
         return f 
 
 def gen_Model_XML(stations, mod_name=None, Low_Domains=None, ):
@@ -336,7 +381,7 @@ def gen_Model_XML(stations, mod_name=None, Low_Domains=None, ):
     # Write the initial xml
     root = ElementTree.Element('MatisseML')
     tree = ElementTree.ElementTree(root)
-    root.set("xmlns",self.xmlns['mtsML'])
+    root.set("xmlns",xmlns['mtsML'])
     root.append(ElementTree.Comment('Generated by gen_Model from pathset.py'))
     m = ElementTree.SubElement(root,'model')
     m_uid = ElementTree.SubElement(m,'model_uid')
@@ -529,11 +574,10 @@ def split_by_stats(phasefile, stats):
     print('Done')
 
 if __name__ == '__main__':
-    Set = PathSetter(phasefile='/Users/ja17375/Projects/Matisse_Synthetics/ppv1/ideal/ppv1_ideal_synthetics_processed.sdb',
-                      odir='/Users/ja17375/Projects/Matisse_Synthetics/')
+    Set = PathSetter(phasefile='/Users/ja17375/Projects/Epac_fast_anom/HQ_phases_on_fast_anom.sdb',
+                      odir='/Users/ja17375/Projects/Epac_fast_anom',
+                      model='/Users/ja17375/Projects/Epac_fast_anom/Models/EP_fast_anom_Model.xml')
     # Make Pathsets for Epac Data
-    Set = PathSetter(phasefile='/Users/ja17375/SWSTomo/Inversions/HQ_phases_on_fast_anom.sdb',
-    odir='/Users/ja17375/SWSTomo/Inversions/', model='EP_fast_anom_Model.xml')
     Set.gen_PathSet_XML(stations='all',lower_dom_no='fast_anom',
                         phases=['ScS','SKS','SKKS'],fname='EP_fast_anom_Paths')
 
