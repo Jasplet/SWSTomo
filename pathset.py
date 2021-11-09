@@ -26,6 +26,7 @@ __status__ = "Development"
 
 # Set XML namespace as global varaible
 xmlns = {'mtsML':'http://www1.gly.bris.ac.uk/cetsei/xml/MatisseML/'}
+DATADIR = '/Users/ja17375/Projects/Splitting_PhD/Runs/E_pacific/'
 
 class PathSetter:
     """A class to hold the metadata for the run (rdir, station? [for now], outdir etc. ) and fucntions
@@ -98,7 +99,11 @@ class PathSetter:
             raise ValueError('Domain {} Not Found'.format(domain))
         
         if phase not in ['SKS', 'SKKS']:
-            raise ValueError(f'Unsupported phase > {phase}')
+            if (phase =='ScS') and (uid.split('_')[0] == 'SSide'):
+                #Bodge for now. Fix when refectoaring domain2operator.
+                pass
+            else:
+                raise ValueError(f'Unsupported phase > {phase}')
         
         if uid.split('_')[0] == 'Lower':
             # Domains starting with Lower are at CMB. So depth == 2890 km. 
@@ -127,19 +132,19 @@ class PathSetter:
         l.text = str(np.around(dist,decimals=3))
         return operator
     
-    def configure_stat_corr_operator(row):
+    def configure_stat_corr_operator(self, row):
         station_corr = ElementTree.Element('operator')
         dom_uid = ElementTree.SubElement(station_corr,'domain_uid')
         dom_uid.text = f'Station {row.STAT}'
         azimuth = ElementTree.SubElement(station_corr,'azi')
         azimuth.text = str(row.AZI)
-        inclination = ElementTree.SubElement(operator,'inc')
+        inclination = ElementTree.SubElement(station_corr,'inc')
         inclination.text = "90" # Inclination is 90 for corrections
-        l = ElementTree.SubElement(operator,'dist')
-        l.text = "100"
+        length = ElementTree.SubElement(station_corr,'dist')
+        length.text = "100"
         return station_corr
     
-    def configure_scs_operators(row, direction, dom_id):
+    def configure_scs_operators(self, row, direction, dom_id):
         '''Handles the (slightly more involved) process of setting up ScS. 
         Downgoing leg should be applied first with a negative aoi. This is because
         a positive aoi corresponds to a ray propagating up through the domain.
@@ -150,7 +155,7 @@ class PathSetter:
         # Now there is a bit of user choice here in what angle to use. 
         # I am going to to chose to use the incindence angle at the CMB bouncepoint.
         depth = 2890. # Approx depth of CMB [km] 
-        slw = get_rayparam(row.EVDP,row.GCARCT,phase='ScS')
+        slw = get_rayparam(row.EVDP,row.GCARC,phase='ScS')
         aoi = slw2aoi(depth,slw) # Calculate ray param and then incidence angle
         dom_h = 250
         dist = dom_h / np.cos(np.deg2rad(aoi))
@@ -167,7 +172,7 @@ class PathSetter:
         elif direction == 'Downgoing':
             inc = (90 - aoi) * -1
         inclination.text = str(inc) # Inclination is 90 for corrections
-        length = ElementTree.SubElement(operator,'dist')
+        length = ElementTree.SubElement(scs_op,'dist')
         dist = dom_h / np.cos(np.deg2rad(aoi))
         length.text = str(dist)
         
@@ -302,24 +307,24 @@ class PathSetter:
                             'evlo':row.EVLO,'stla':row.STLA,'stlo':row.STLO,
                             'date':row.DATE,'time':row.TIME,'stat':row.STAT,
                             'phase' :row.PHASE}
-            filepath = self.set_filepaths(attribs)
+            filepath = f'{DATADIR}/{row.STAT}/{row.PHASE}/{row.STAT}_{row.DATE}_{row.TIME}??_{row.PHASE}.mts'
             try:
-                fileID = glob.glob(filepath)[0].strip('.mts').split('/')[-1]
+                mts_file = glob.glob(filepath)[0]
+                fileID = mts_file.strip('.mts').split('/')[-1]
                 # Strip out .mts and split by '/', select end to get filestem
             except IndexError:
                 Warning('Glob has failed to find anything!')
                 continue
 
             ldom_id = 'Lower_{}'.format(lower_dom_no)
-
-            get_sac(fileID,attribs['stat'],attribs['phase'])
+            get_sac(fileID, self.opath, DATADIR, attribs['stat'],attribs['phase'])
             # Now make XML for this Path
             path = ElementTree.SubElement(pathset,'path')
             pathname = 'Path {} {}'.format(p,attribs['phase'])          
             path_uid = ElementTree.SubElement(path,'path_uid')
             path_uid.text = pathname
             # Add Data (from .mts)
-            data = get_mts(fileID,attribs['stat'],attribs['phase'])
+            data = get_mts(mts_file,attribs['stat'],attribs['phase'])
             path.append(data)
             stat_uid = ElementTree.SubElement(path,'station_uid')
             stat_uid.text = attribs['stat']
@@ -353,16 +358,8 @@ class PathSetter:
         #Now write out the Pathset XML
         tree = ElementTree.ElementTree(self.pathset_root)
         ElementTree.indent(tree, space="\t", level=0)
-        pathset_out = f'{self.odir}/{self.pathset_xml}.xml'
+        pathset_out = f'{self.opath}/{self.pathset_xml}.xml'
         tree.write(pathset_out, encoding="utf-8")
-
-    def set_filepaths(self,attribs):
-        '''Set filepaths to datasets for different phases
-            I need this to keep up with the sprawling sheba Runs directories for different things
-        ''' 
-        f = '/Users/ja17375/Projects/Splitting_PhD/Runs/E_pac_inv/{}/{}/{}_{}_{}??_{}.mts'.format(attribs['stat'],
-            attribs['phase'],attribs['stat'],attribs['date'],attribs['time'],attribs['phase'])        
-        return f 
 
 def gen_Model_XML(stations, mod_name=None, Low_Domains=None, ):
     '''
