@@ -4,7 +4,7 @@ from scipy.stats import circmean
 from numpy import mean,deg2rad,rad2deg,pi,sin,cos,arctan2
 import matplotlib.pyplot as plt
 import numpy as np 
-def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None):
+def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None, med=None):
     '''
     Takes a single bin and creates the requisit domain XML (for Model.xml)
     '''
@@ -14,7 +14,10 @@ def bin2domain(dom_name,ac=None,bc=None,gc=None,sc=None):
     dom_uid.text = dom_name
     domain.append(ElementTree.Comment(' Elastic medium '))
     medium = ElementTree.SubElement(domain,'medium')
-    medium.text = 'elliptical:2000.,1000.,2000.'
+    if med =='geo':
+        medium.text = 'splt:geo'
+    else:
+        medium.text = 'elliptical:2.,1.,2000.'
     domain.append(ElementTree.Comment(' Inversion Parameters '))
 
     if ac :
@@ -59,7 +62,7 @@ def add_sside_correction(date,time,stat):
             <Element 'domain' at 0x11c3c3310>
     '''
     date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
-    cdf = pd.read_csv('/Users/ja17375/SWSTomo/SourceSideCorrs/Jacks_ScS_FINAL_w_SSIDE_corr.rdb',
+    cdf = pd.read_csv('/Users/ja17375/Projects/Epac_fast_anom/Jacks_Final_ScS_overlap.rdb',
                     delim_whitespace=True,converters=date_time_convert)
     corr = cdf[(cdf.DATE == date) & (cdf.TIME == time) & (cdf.STAT == stat)]
     if len(corr) == 0:
@@ -71,7 +74,7 @@ def add_sside_correction(date,time,stat):
     gamma_rad = circmean(deg2rad(corr.S_FAST.values), low = -pi*0.5, high = pi*0.5)
     gamma = rad2deg(gamma_rad)
     strength = mean(corr.S_TLAG.values) / 100
-    corr_dom = bin2domain(uid, gc = gamma, sc = strength)
+    corr_dom = bin2domain(uid, gc = gamma, sc = strength, med='geo')
     
     return corr_dom
     
@@ -86,7 +89,7 @@ def check_if_sside_corr(df):
         df_w_corr
     '''
     date_time_convert = {'TIME': lambda x: str(x),'DATE': lambda x : str(x)}
-    cdf = pd.read_csv('/Users/ja17375/SWSTomo/SourceSideCorrs/Jacks_ScS_FINAL_w_SSIDE_corr.rdb',
+    cdf = pd.read_csv('/Users/ja17375/Projects/Epac_fast_anom/Jacks_Final_ScS_overlap.rdb',
                     delim_whitespace=True,converters=date_time_convert)
     
     m = pd.merge(df,cdf,how='inner',on=['DATE', 'TIME', 'STAT'])
@@ -106,7 +109,7 @@ def check_if_sside_corr(df):
     return df_w_corr
 
 
-def add_station_correction(stat,cfile='/Users/ja17375/SWSTomo/Inversions/Station_Corrections_from_Stacks.txt'):
+def add_station_correction(stat,cfile='/Users/ja17375/Projects/Epac_fast_anom/Station_Corrections_from_Stacks_full.txt'):
     '''
     This function looks up a domain correction for the input upper mantle domain (domain IDs assigned by geogeom)
     
@@ -125,6 +128,6 @@ def add_station_correction(stat,cfile='/Users/ja17375/SWSTomo/Inversions/Station
     phi = corr.Gamma.values[0]
     s = corr.Strength.values[0]
     uid = f'Station_{stat}'
-    corr_dom = bin2domain(uid,sc=s, gc=phi)
+    corr_dom = bin2domain(uid,sc=s, gc=phi, med='geo')
     
     return corr_dom 
