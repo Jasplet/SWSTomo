@@ -3,11 +3,11 @@ from xml.etree import ElementTree
 from shutil import copy
 from obspy.signal.rotate import rotate2zne
 
-def get_mts(fileID,stat=None,phase=None, syn=False):
+def get_mts(mts_file,stat=None,phase=None, syn=False):
     '''Function to get the .mts file for a phase and read in the xml.
 
         Args:
-            fileID - filename (minus extension) of the data XML we want to read
+            mts_file- filename (minus extension) of the data XML we want to read
             stat - the station code (data is stored by station code)
             phase (str) - phase code (ScS,SKS,SKKS, etc.) to fetch data for
         
@@ -19,17 +19,9 @@ def get_mts(fileID,stat=None,phase=None, syn=False):
 
     '''
     if syn:
-        mts = '{}.mts'.format(fileID)
-    else:
-        if phase == 'ScS':
-            path = '/Users/ja17375/SWSTomo/ScS_data'
-            
-        else:
-            path = '/Users/ja17375/SWSTomo/SnKS_data'
-            
-        mts = '{}/{}/{}/{}.mts'.format(path,stat,phase,fileID)
+        mts_file = '{}.mts'.format(mts_file)
         
-    xml = ElementTree.parse(mts) # Parse the xml file (output from sheba as .mts)
+    xml = ElementTree.parse(mts_file) # Parse the xml file (output from sheba as .mts)
     data = xml.getroot() # Gets the root element of the XML. In this case (the .mts) this is the tag <data> which we want to inject into the
                                  # the bigger Pathset XML file
     for file in ['file1','file2','file3']:# Loop over file tags to add in pointer to data dir
@@ -40,7 +32,7 @@ def get_mts(fileID,stat=None,phase=None, syn=False):
 
     return data
 
-def get_sac(fileID,stat,phase, syn=False):
+def get_sac(fileID,dst_path,src_path,stat,phase, syn=False):
     '''Function to copy data to the local data directory "data" if it is not already there (mainly useful for test/first runs).
 
        Args:
@@ -53,24 +45,20 @@ def get_sac(fileID,stat,phase, syn=False):
            >>> Set.get_sac('SKS')
     '''
     for comp in ['E','N','Z']:
-        f = Path('/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp))
+        f = Path('/Users/ja17375/Projects/Epac_fast_anom/data/{}.BH{}'.format(fileID,comp))
         if f.is_file():
-            # print('/Users/ja17375/SWSTomo/BluePebble/E_pacific/data/{}.BH{} exists, not copying'.format(fileID,comp))
+            #print(f'{f} exists, not copying'.format(fileID,comp))
             pass
         else:
-            # print('File not found, copying from Sheba Run Dir E_pacific if possible')     
+            print(f'File not found, copying from {src_path} if possible')     
             if syn:
                 file = f'{fileID}.BH{comp}'
                 f = fileID.split('/')[-1]
-                dst = '/Users/ja17375/Projects/Matisse_Synthetics/data/{}.BH{}'.format(f,comp)
+                dst = '/Users/ja17375/Projects/Epac_fast_anom/data/{}.BH{}'.format(f,comp)
                 print(f'Copy synthetic data {file}')
             else:
-                dst = '/Users/ja17375/SWSTomo/data/{}.BH{}'.format(fileID,comp)
-                if phase == 'ScS':
-                    path = '/Users/ja17375/SWSTomo/ScS_data'
-                else:
-                    path = '/Users/ja17375/SWSTomo/SnKS_data'
-                file = '{}/{}/{}/{}.BH{}'.format(path,stat,phase,fileID,comp)
+                dst = f'{dst_path}/data/{fileID}.BH{comp}'
+                file = f'{src_path}/{stat}/{phase}/{fileID}.BH{comp}'
                     
             _ = copy(file, dst)
         
