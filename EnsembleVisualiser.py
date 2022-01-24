@@ -8,10 +8,10 @@ Created on Wed Nov 18 16:12:12 2020
 import numpy as np
 import pandas as pd
 from scipy import stats
-from scipy.interpolate import griddata, RegularGridInterpolator
+from matplotlib.gridspec import GridSpec as gs
 import matplotlib.pyplot as plt
 from l2stats import ftest
-FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
+FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures'
 
 
 def restore_params(param, p_min, p_max):
@@ -34,10 +34,13 @@ class Ensemble:
         '''
         Read raw ensemble and transform it back from the normalise parameter space
         '''
-        self.config = {'alpha_min': 0, 'alpha_max': 90, 'gamma_min': -180,
+        self.config = {'alpha_min': 0, 'alpha_max': 90,
+                       'beta_min': 0, 'beta_max': 90,
+                       'gamma_min': -180,
                              'gamma_max': 180, 'strength_min': 0, 'strength_max': strmax}
 
         self.rundir = rundir
+        self.dims = dims
         if read:
             raw_ensemble = self.read_ensemble(rundir,fname)
             if dims == 'ags':
@@ -51,7 +54,7 @@ class Ensemble:
                 # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
                 # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
                 misfit = 1 / raw_ensemble[:, -1]
-                self.models = pd.DataFrame({'alpha': alpha, 'gamma': gamma,
+                self.models = pd.DataFrame({'alpha': alpha,'gamma': gamma,
                                            'strength':strength, 'misfit': misfit})
                 print('Model Config set as:')
                 print('{} < alpha < {}'.format(self.config['alpha_min'], self.config['alpha_max']))
@@ -85,6 +88,30 @@ class Ensemble:
                 misfit = 1 / raw_ensemble[:, -1]
                 self.models = pd.DataFrame({'gamma': gamma,
                                            'strength':strength, 'misfit': misfit})
+            elif dims == 'all':
+                alpha = restore_params(raw_ensemble[:,0],
+                                    self.config['alpha_min'], self.config['alpha_max'])
+                beta = restore_params(raw_ensemble[:,1], 
+                                      self.config['beta_min'], self.config['beta_max'])
+                gamma = restore_params(raw_ensemble[:,2],
+                                    self.config['gamma_min'], self.config['gamma_max'])
+                strength = restore_params(raw_ensemble[:,3],
+                                    self.config['strength_min'], self.config['strength_max'])
+                # raw ensemble also has our function f(x) that approximates (or is proportional to) the true PDF
+                # evaluated for each model. f(x) = 1 / sum(lam2) for all paths in the inversion
+                # to get the model misfit (i.e the sum of the lam2 residuals) we need to take the reciprocal
+                misfit = 1 / raw_ensemble[:, -1]
+                self.models = pd.DataFrame({'alpha': alpha, 
+                                            'beta': beta, 
+                                            'gamma': gamma,
+                                           'strength':strength, 'misfit': misfit})
+                print('Model Config set as:')
+                print('{} < alpha < {}'.format(self.config['alpha_min'], self.config['alpha_max']))
+                print('{} < beta < {}'.format(self.config['beta_min'], self.config['beta_max']))
+                print('{} < gamma < {}'.format(self.config['gamma_min'], self.config['gamma_max']))
+                print('{} < strength < {}'.format(self.config['strength_min'],
+                                                  self.config['strength_max']))
+                      
         # Store modes as a DataFrame for ease of reference. Misfit index as [:,-1] in order to
         # "future proof" as misfit is always last column of MTS_ensemble.out 
 
@@ -93,8 +120,6 @@ class Ensemble:
         raw_ensemble = np.loadtxt(f'{path}/{fname}')
         
         return raw_ensemble
-
-
 
     def find_fcrit(self, ndf):
         '''Find the f-test 95% confidence value  
@@ -108,50 +133,6 @@ class Ensemble:
         # last col of model is always misfit
         self.fcrit = ftest(best[-1], ndf,k)
         
-        
-    def evaluate_3d_kde(self, nsamps=50):
-        ''' Function to make the full 3D PDF from model Ensemble. As we are using all 3 params
-        (alpha, gamma, strength) we do not need to worry about handling different combos'''
-        self.alpha_samples = np.linspace(self.config['alpha_min'],
-                                         self.config['alpha_max'],nsamps)
-        self.gamma_samples = np.linspace(self.config['gamma_min'],
-                                         self.config['gamma_max'],nsamps)
-        self.strength_samples = np.linspace(self.config['strength_min'],
-                                            self.config['strength_max'],nsamps)
-        a_samp, g_samp, s_samp = np.meshgrid(
-                                    self.alpha_samples,
-                                    self.gamma_samples,
-                                    self.strength_samples)  
-        samples = np.vstack([a_samp.ravel(), g_samp.ravel(), s_samp.ravel()])
-        models = np.vstack([self.models.alpha.values,
-                            self.models.gamma.values,
-                            self.models.strength.values
-                            ])
-        kernel = stats.gaussian_kde(models)
-        self.pdf_3d = np.reshape(kernel(samples), (nsamps, nsamps, nsamps))
-
-    def find_most_likely(self, ret=False):
-        '''
-        finds the most likely (i.e. maximum) value in model ensemble. 
-        this method requires that the object has self.pdf_3d (either read in or generated) 
-        '''
-
-        idxmax = self.pdf_3d.argmax()
-        # Translate single index to the indicies of the 3D array
-        ags = np.unravel_index(idxmax, self.pdf_3d.shape)
-        # Make an array holding the most likely model
-        self.most_likely_model = [self.alpha_samples[ags[0]],
-                                  self.gamma_samples[ags[1]],
-                                  self.strength_samples[ags[2]]
-                                  ]
-        if ret:    
-            return self.most_likely_model
-        elif not ret:
-            print('The most likely model for the given Model Ensemble is:')
-            print(f'Alpha = {self.most_likely_model[0]:.3f}')
-            print(f'Gamma = {self.most_likely_model[1]:.3f}')
-            print(f'Strength = {self.most_likely_model[2]:.3f}')
- 
     def find_best_fitting(self, ret=False):
         '''
         Finds the best fitting model from the model ensemble 
@@ -160,27 +141,12 @@ class Ensemble:
         self.best_fitting_model = self.models.iloc[imin]
         if ret:
             return self.best_fitting_model
-        elif not ret:
+        else:
             print('The best fitting model is:')
             print(f'Alpha = {self.best_fitting_model[0]:.5f}')
             print(f'Gamma = {self.best_fitting_model[1]:.5f}')
             print(f'Strength = {self.best_fitting_model[2]:.5f}')
             print(f'Model misfit = {self.best_fitting_model[3]:.5f}')
-       
-    def read_3d_pdf(self, fileID):
-        ''' Reads existing 3D PDF '''
-        self.pdf_3d = np.load(fileID)
-        # check pdf is evenly sampled
-        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[1]
-        assert self.pdf_3d.shape[0] == self.pdf_3d.shape[2]
-        self.nsamps = self.pdf_3d.shape[0]
-        # Now we know sampling is even, generate sample values
-        self.alpha_samples = np.linspace(self.config['alpha_min'],
-                                         self.config['alpha_max'],self.nsamps)
-        self.gamma_samples = np.linspace(self.config['gamma_min'],
-                                         self.config['gamma_max'],self.nsamps)
-        self.strength_samples = np.linspace(self.config['strength_min'],
-                                            self.config['strength_max'],self.nsamps)
      
     def make_section(self, value, axis):
         '''
@@ -190,96 +156,138 @@ class Ensemble:
             raise ValueError(f'Axis {axis} undefined')
         elif axis == 'alpha':
             cols = ['gamma', 'strength', 'misfit']
-            assert np.less_equal(value, self.model_config['alpha_max'])
-            assert np.greater_equal(value, self.model_config['alpha_min'])
+            assert np.less_equal(value, self.config['alpha_max'])
+            assert np.greater_equal(value, self.config['alpha_min'])
         elif axis == 'gamma':
             cols = ['alpha', 'strength', 'misfit']
-            assert np.less_equal(value, self.model_config['gamma_max'])
-            assert np.greater_equal(value, self.model_config['gamma_min'])
+            assert np.less_equal(value, self.config['gamma_max'])
+            assert np.greater_equal(value, self.config['gamma_min'])
         elif axis == 'strength':
             cols = ['alpha', 'gamma', 'misfit']
-            assert np.less_equal(value, self.model_config['strength_max'])
+            assert np.less_equal(value, self.config['strength_max'])
             assert np.greater_equal(value, 0)
 
         slc = self.models[(np.isclose(self.models[axis], value, rtol=1.e-2)) & (self.models['misfit'] <= 1)]
         section = slc[cols]
 
-
         return section     
-        
-    def save_3d_pdf(self, outfile):
-        ''' Saves 3-D PDF as Numpy Array'''
-        np.save(f'{self.rundir}/{outfile}', self.pdf_3d)
-
-    def param_kde(self, ax, p, param):
-        '''
-        Make a Kernel Density estimate of the parameter and plot on fig axis
-        '''
-        kde = stats.gaussian_kde(p)
-        if param in ['alpha','gamma','strength']:
-            mx = self.config[f'{param}_max']
-            mn = self.config[f'{param}_min']
-        elif param == 'misfit':
-            mx = 1
-            mn = 0 
-        else:
-            raise ValueError
-        
-        xx = np.linspace(mn, mx, 1000)
-        y = kde(xx)
-        ax.plot(xx, y)
-        ax.set_xlim([mn, mx])
-        ax.set_ylim([0, y.max()*1.15])
-        return y.max()
     
-    def plot_param_hists(self,candidate):
+    def plot_2d_marginal_histograms(self, xparam, yparam, fname=None):
         '''
-        Makes a 4-panel histogram of model parameters and misfit
-        '''  
-        if candidate == 'ellip':
-            title = 'Elliptical TI'
-            fout = 'ellip_TI'
-        elif candidate == 'br':
-            title = 'Bridgmanite (100)[001]'
-            fout = 'br_100_001'
-            bestmodel = [42.85864, 22.26776,
-                         0.25486, 0.42735]
-        elif candidate == 'ppv1':
-            title = 'Post-Perovskite (001)[100]'
-            fout = 'ppv_001_100'
-            bestmodel = [22.80220, -84.61130,
-                         0.10352, 0.44248]
-        elif candidate == 'ppv2':
-            title = 'Post-Perovskite (010)[100]'
-            fout = 'ppv_010_100'
-        fig, ((ax1,ax2),(ax3,ax4)) = plt.subplots(nrows=2, ncols=2, figsize=(7,7))
+        Plots a 2-D histogram with 1-D marginals on the edge for a input pair of parameter
+        '''
+        params = ['alpha', 'gamma', 'beta', 'strength']
+        if (xparam not in params) or (yparam not in params):
+            raise ValueError(f'Unexpected parameters {xparam}, {yparam}')
+        # fin best fitting model
+        bestmodel = self.find_best_fitting(ret=True)
+        xbest = bestmodel[xparam]
+        ybest = bestmodel[yparam]
+        # Make figure object
+        ticks = {'alpha':[0,15,30,46,60,75,90],
+                 'gamma':[-180,-120,-60,0,60,120,180],
+                 'strength':np.linspace(0, self.config['strength_max'], 6)
+                 }
         
-        # ax1.hist(self.models.alpha,bins=20)
-        a_kde = self.param_kde(ax1, self.models.alpha, 'alpha')
-        ax1.vlines(bestmodel[0], ymin=0, ymax=a_kde*1.15)
-        ax1.set_title('Alpha')
-        ax1.set_ylabel('Density')
-        ax1.set_xticks([0, 30, 60, 90])
-        # ax2.hist(self.models.gamma,bins=20)
-        g_kde = self.param_kde(ax2, self.models.gamma, 'gamma')
-        ax2.vlines(bestmodel[1], ymin=0, ymax=g_kde*1.15)
-        ax2.set_title('Gamma') 
-        ax2.set_ylabel('Density')
-        ax2.set_xticks([-180,-120,-60,0,60,120,180])
-        # ax3.hist(self.models.strength,bins=20)
-        s_kde = self.param_kde(ax3, self.models.strength, 'strength')
-        ax3.vlines(bestmodel[2], ymin=0, ymax=s_kde*1.15)
-        ax3.set_title('Strength')
-        ax3.set_ylabel('Density')
-        # ax4.hist(self.models.misfit,bins=20)
-        m_kde = self.param_kde(ax4, self.models.misfit, 'misfit')
-        ax4.vlines(bestmodel[3], ymin=0, ymax=m_kde*1.15)
-        ax4.set_title('Model Misfit')
-        ax4.set_ylabel('Density')
-        fig.suptitle(f'{title} bootstrapped KDEs')
-        plt.tight_layout()
-        plt.savefig(f'{FIG_DIR}/{fout}_bootstrap_KDE.png',dpi=400)
-        plt.show()
+        
+        fig = plt.figure(figsize = (10,10))
+        axs = gs(ncols = 5,nrows = 4, hspace =0.3, wspace=0.3,
+                 width_ratios=[1,1,1,1,0.2], height_ratios=[1,1,1,1])
+        # axis object for 1-D marginal histogram for yparam 
+        ax_y = fig.add_subplot(axs[:-1,0])
+        # axis object for 1-D marginal histogram for xparam
+        ax_x = fig.add_subplot(axs[-1,1:-1])
+        ax_main = fig.add_subplot(axs[:-1,1:-1],sharey=ax_y,sharex=ax_x)
+        # axis obecjt for the colorbar
+        ax_c = fig.add_subplot(axs[:-1,-1])
+        
+        # Plot 2-D histogram
+        h2d = ax_main.hist2d(x=self.models[xparam], y=self.models[yparam], bins=[80, 80],
+                             cmap='plasma')
+        # add best fitting model[]
+        ax_main.plot(xbest, ybest, 'kx',markersize=20)
+        ax_main.set_xlim([self.config[f'{xparam}_min'], self.config[f'{xparam}_max']])
+        ax_main.set_ylim([self.config[f'{yparam}_min'], self.config[f'{yparam}_max']])
+        # Plot 1-D histogram for yparam
+        ax_y.hist(self.models[yparam], bins=80,
+                  orientation='horizontal')
+        ax_y.set_ylabel(yparam.capitalize(), fontsize=14)
+        ax_y.set_yticks(ticks[yparam])
+        ax_y.invert_xaxis()
+        
+        # Plot 1-D histogram for xparam
+        ax_x.hist(self.models[xparam], bins=80)
+        ax_x.set_xticks(ticks[xparam])
+        ax_x.invert_yaxis()
+        ax_x.set_xlabel(xparam.capitalize(), fontsize=14)
+        
+        # Add colorbar
+        plt.colorbar(h2d[3], cax=ax_c, aspect=20)
+        plt.setp(ax_main.get_xticklabels(),visible=False)
+        plt.setp(ax_main.get_yticklabels(),visible=False)
+        
+        if fname:
+            plt.savefig(f'{FIG_DIR}/{fname}', dpi=500)
+        else:
+            plt.show()
+        
+    def plot_all_2d_histograms(self, fstem=None):
+        '''Plot all 3 2d histograms, if fstem is provided then figures are saved to FIGDIR
+        '''
+        
+        if fstem:
+            self.plot_2d_marginal_histograms('gamma', 'alpha',fname=f'{fstem}_gamma_alpha.png')
+            self.plot_2d_marginal_histograms('gamma', 'strength', fname=f'{fstem}_gamma_str.png')
+            self.plot_2d_marginal_histograms('alpha', 'strength', fname=f'{fstem}_alpha_str.png')
+        else:
+            self.plot_2d_marginal_histograms('gamma', 'alpha')
+            self.plot_2d_marginal_histograms('gamma', 'strength')
+            self.plot_2d_marginal_histograms('alpha', 'strength')
+        
+    def _add_2d_kde(self, ax, xparam, yparam):
+        '''Made a 2-D kernel desnity estimation plot for MTS Ensemble data'''
+        # Get the correct x,y limits depending on input params
+        xlim = [self.config[f'{xparam}_min'], self.config[f'{xparam}_max']]
+        ylim = [self.config[f'{yparam}_min'], self.config[f'{yparam}_max']]
+        # Set up samples 100 in both X and Y directions
+        X, Y = np.mgrid[xlim[0]:xlim[1]:100j, ylim[0]:ylim[1]:100j]
+        samples = np.vstack([X.ravel(), Y.ravel()])
+        # Get params out of DF as numpy arrays
+        x_models = self.models[xparam].values
+        y_models = self.models[yparam].values
+        # Stack params for KDE
+        models = np.vstack([x_models, y_models])
+        # 'make' KDE function
+        kernal = stats.gaussian_kde(models)
+        pdf = kernal(samples).T
+        # Now we have our KDE, reshape the array for plotting
+        Z = np.reshape(pdf, X.shape)
+        ax.contourf(X, Y, Z, cmap=plt.cm.gist_earth_r, levels=8, vmin=1e-5)
+        ax.contour(X, Y, Z, levels=10)
+        # Add location of best fitting model
+        x_best = self.best_fitting_model[xparam]
+        y_best = self.best_fitting_model[yparam]
+        ax.plot(x_best, y_best, 'x', color='red' )
+
+    def _add_1d_kde(self, ax, param):
+        '''Make a KDE plot for input values.
+        Which model parameter (alpha, gamma, strength, misfit) is determined by param'''
+        lim = [self.config[f'{param}_min'], self.config[f'{param}_max']]
+        x = np.linspace(lim[0], lim[1], 1000)
+        ticks = np.linspace(lim[0], lim[1], 4) # Auto control ticks on axes labels
+        values = self.models[param].values
+        kernal = stats.gaussian_kde(values)
+        pdf = kernal(x)
+        ax.plot(x, pdf, 'k')
+        # Add best fitting model
+        ax.axvline(self.best_fitting_model[param], color='red', markersize=3)
+        ax.set_xticks(ticks)
+        ax.set_ylim([0, np.max(pdf)*1.1])
+        
 if __name__ == '__main__':
-    ppv = Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_model/', strmax=0.5)
-    ppv.plot_2d_sections(239)
+    ppv1 = Ensemble('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/ScS_fix_test/ppv_001_100', strmax=0.5)
+    ppv1.plot_all_2d_histograms('ppv1_2D_hist')
+    ppv2 = Ensemble('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/ScS_fix_test/ppv_010_100', strmax=0.5)
+    ppv2.plot_all_2d_histograms('ppv2_2D_hist')
+    # pv = Ensemble('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/ScS_fix_test/pv_100_001', strmax=0.5)
+    # ellipTI = Ensemble('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/ScS_fix_test/ellipTI')
