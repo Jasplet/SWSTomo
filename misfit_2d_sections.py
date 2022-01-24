@@ -11,12 +11,12 @@ from l2stats import ftest
 import resampler
 from EnsembleVisualiser import Ensemble
 
-FIG_DIR = '/Users/ja17375/SWSTomo/Figures/ModelSlices/Contoured'
+FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures/ModelSlices/'
  
 
 def plot_sections(Ensemble, model, config, err):
     
-    clevels = [0.2, 0.3, 0.4, 0.5,0.6,0.7,0.8,0.9,1.0,2.0]
+    clevels = [0.2, 0.3, 0.4,0.5,0.6,0.7,0.8,0.9,1.0]
     fig = plt.figure(figsize=(22,6)) 
     fcrit = Ensemble.fcrit
     print(fcrit)
@@ -50,7 +50,7 @@ def plot_sections(Ensemble, model, config, err):
     ax2.set_yticks(np.linspace(config['gamma_min'], config['gamma_max'], 7))
     ax2.set_xlabel('Strength', fontsize=16)
     ax2.set_ylabel(r'$\gamma$ (°)', fontsize=16)
-    ax2.set_title(r'Slice through $\alpha$ = {:4.3f}°'.format(model[0]), fontsize=16) 
+    ax2.set_title(r'Slice through $\alpha$ = {:4.0f}°'.format(model[0]), fontsize=16) 
     ax2.tick_params(labelsize=16)
     
     ax3 = fig.add_subplot(133)
@@ -70,9 +70,9 @@ def plot_sections(Ensemble, model, config, err):
     ax3.tick_params(labelsize=16)
     
     #Add best model
-    ax1.errorbar(s_int, a_int, 'kx', yerr=err[0], xerr=err[2], markersize=10)
-    ax2.plot(s_int, g_int, 'kx', yerr=err[1], xerr=err[2], markersize=10)
-    ax3.plot(a_int, g_int, 'kx', yerr=err[1], xerr=err[0], markersize=10)
+    ax1.errorbar(s_int, a_int, fmt='bx', yerr=err[0], xerr=err[2], markersize=15)
+    ax2.errorbar(s_int, g_int, fmt='bx', yerr=err[1], xerr=err[2], markersize=15)
+    ax3.errorbar(a_int, g_int, fmt='bx', yerr=err[1], xerr=err[0], markersize=15)
     # fig.colorbar(C, ax=[ax1,ax2,ax3])
     fig.tight_layout()
     
@@ -82,41 +82,38 @@ if __name__ == '__main__':
      # Add sample steps to Ensemble config
     samp_config = {'alpha_min': 0, 'alpha_max':90, 'alpha_step':1,
                    'gamma_min':-180, 'gamma_max':180, 'gamma_step': 2,
-                   'strength_min':0, 'strength_max': 0.02, 'strength_step': 0.0005}   
+                   'strength_min':0, 'strength_max': 0.02, 'strength_step': 0.0005}  
+    path = '/Users/ja17375/Projects/Epac_fast_anom/HQ_data/ScS_fix_test'
     #Elliptical model
-    rundir = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/EllipTI/'
-    E = Ensemble(rundir, strmax=samp_config['strength_max'])
+    E = Ensemble(f'{path}/ellipTI', strmax=samp_config['strength_max'])
     E.find_fcrit(ndf=239)
     mod = E.find_best_fitting(ret=True)
-    TI_err = [4.777, 8.630, 0.002]
+    TI_err = [6, 2, 0.002]
     fig1 = plot_sections(E, mod, samp_config, TI_err)
-    fig1.savefig(f'{FIG_DIR}/Ellip_misfit_2D_slice.png')
+    fig1.savefig(f'{FIG_DIR}/Ellip_misfit_2D_slice.eps')
     # Bridgmanite Model
     samp_config['strength_max'] = 0.5
     samp_config['strength_step'] = 0.005
-    rundir = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/pv_100_001/'
-    E = Ensemble(rundir, strmax=samp_config['strength_max'])
+    E = Ensemble(f'{path}/pv_100_001', strmax=samp_config['strength_max'])
     E.find_fcrit(ndf=239)
     mod = E.find_best_fitting(ret=True)
-    bm_err = [4.517, 31.934, 0.053]
+    bm_err = [5, 5, 0.06]
     fig2 = plot_sections(E, mod, samp_config, bm_err)
-    fig2.savefig(f'{FIG_DIR}/pv_001_100_misfit_2D_slice.png')
+    fig2.savefig(f'{FIG_DIR}/pv_100_001_misfit_2D_slice.eps')
     # ppv 100_001 Model
     samp_config['strength_max'] = 0.5
     samp_config['strength_step'] = 0.005
-    rundir = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_001_100/'
-    E = Ensemble(rundir, strmax=samp_config['strength_max'])
+    E = Ensemble(f'{path}/ppv_001_100', strmax=samp_config['strength_max'])
     E.find_fcrit(ndf=239)
     mod = E.find_best_fitting(ret=True)
-    ppv1_err = [9.463, 35.148, 0.071]
-    fig3 = plot_sections(E, mod, samp_config)
-    fig3.savefig(f'{FIG_DIR}/ppv_100_001_misfit_2D_slice.png')
+    ppv1_err = [2, 4, 0.06]
+    fig3 = plot_sections(E, mod, samp_config, ppv1_err)
+    fig3.savefig(f'{FIG_DIR}/ppv_001_100_misfit_2D_slice.eps')
     # ppv 100_010 Model
     samp_config['strength_max'] = 0.5
-    rundir = '/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/ppv_010_100/'
-    E = Ensemble(rundir, strmax=samp_config['strength_max'])
+    E = Ensemble(f'{path}/ppv_010_100', strmax=samp_config['strength_max'])
     E.find_fcrit(ndf=239)
-    ppv2_err = [4.352, 60.047, 0.051]
+    ppv2_err = [2, 2, 0.02]
     mod = E.find_best_fitting(ret=True)
-    fig4 = plot_sections(E, mod, samp_config)
-    fig4.savefig(f'{FIG_DIR}/ppv_100_010_misfit_2D_slice.png')
+    fig4 = plot_sections(E, mod, samp_config, ppv2_err)
+    fig4.savefig(f'{FIG_DIR}/ppv_010_100_misfit_2D_slice.eps')
