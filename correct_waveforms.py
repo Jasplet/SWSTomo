@@ -7,7 +7,7 @@ Created on Tue Feb  2 11:33:08 2021
 """
 import obspy 
 from obspy import UTCDateTime
-import splitwavepy as sw
+# import splitwavepy as sw
 import numpy as np
 import pandas as pd
 import pickle
