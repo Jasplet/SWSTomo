@@ -45,34 +45,40 @@ def plot_bootstrapped_samples(Samples,outfile=None):
     
     plt.show()
     
-def add_kde(ax, cand, param):
+def add_kde(ax, cand, param, bestfit):
     '''Make a KDE plot for input values. 
     Which model parameter (alpha, gamma, strength, misfit) is determined by param'''
+    ticks = None
     if param == 'alpha':
         x = np.linspace(0, 90, 1000)
         lim = [0, 90]
+        ticks = [0,30, 60, 90]
     elif param == 'gamma':
         x = np.linspace(-180, 180, 2000)
         lim=[-180, 180]
+        ticks = [-180,-90,0,90,180]
     elif param == 'strength':
         x = np.linspace(0, cand.config['strength_max'], 1000)
         lim=[0, cand.config['strength_max']]
     elif param == 'misfit':
         x = np.linspace(0, 1.5, 1000)
         lim=[0, 0.8]
+        ticks = [0, 0.2, 0.4, 0.6]
     values = cand.models[param]
     kde = stats.gaussian_kde(values)
     y = kde(x)
-    # ymax = np.ceil(y.max())
     ax.plot(x, y, 'k')
 
     sig_min = values.mean()-values.std()
     sig_max = values.mean()+values.std()
     sig_x = np.linspace(sig_min, sig_max, 200)
     ax.fill_between(sig_x, 0, kde(sig_x), alpha=0.5)
-    #ax.vlines(values.mean(), ymin=0, ymax=250,colors='k')
+    ax.axvline(values.mean(), color='k')
+    ax.axvline(bestfit, color='red')
     ax.set_xlim(lim)
-    
+    if ticks:
+        ax.set_xticks(ticks)
+    ax.set_ylim([0, np.max(y)*1.1])
 if __name__ == '__main__':
         path = '/Users/ja17375/Projects/Matisse_Synthetics/ppv1'
         Samples = Ensemble(f'{path}/ideal/Noise01/Bootstrapping',
