@@ -15,7 +15,7 @@ FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures/ModelSlices/'
  
 
 def plot_sections(Ensemble, model, config, err):
-    
+      
     clevels = [0.2, 0.3, 0.4,0.5,0.6,0.7,0.8,0.9,1.0]
     fig = plt.figure(figsize=(22,6)) 
     fcrit = Ensemble.fcrit
@@ -27,13 +27,13 @@ def plot_sections(Ensemble, model, config, err):
     ss, aa = np.meshgrid(s, a)
     CS1 = ax1.contour(ss, aa, slc, levels=clevels, colors='k')
     ax1.contour(ss, aa, slc, levels=[fcrit], linewidths=3., colors='k')
-    ax1.clabel(CS1, inline=True, fontsize=12)
+    ax1.clabel(CS1, inline=True)
     ax1.set_xlim([config['strength_min'], config['strength_max']])
     ax1.set_ylim([0,90])
     ax1.set_xticks(np.linspace(config['strength_min'], config['strength_max'], 6))
     ax1.set_yticks(np.linspace(0,90,7))
-    ax1.set_xlabel('Strength',fontsize=16)
-    ax1.set_ylabel(r'$\alpha$ (°)', fontsize=16)
+    ax1.set_xlabel('Strength', fontsize=14)
+    ax1.set_ylabel(r'$\alpha$ (°)', fontsize=14)
     ax1.set_title(r'Slice through $\gamma$ = {:4.3f}°'.format(model[1]), fontsize=16)
     ax1.tick_params(labelsize=16)
     
@@ -43,14 +43,14 @@ def plot_sections(Ensemble, model, config, err):
     ss, gg = np.meshgrid(s, g)
     CS2 = ax2.contour(ss,gg, slc, levels=clevels, colors='k')
     ax2.contour(ss, gg, slc, levels=[fcrit], linewidths=3., colors='k')
-    ax2.clabel(CS2, inline=True, fontsize=12)
+    ax2.clabel(CS2, inline=True)
     ax2.set_xlim([config['strength_min'], config['strength_max']])
     ax2.set_ylim([-180, 180])
     ax2.set_xticks(np.linspace(config['strength_min'], config['strength_max'], 6))
     ax2.set_yticks(np.linspace(config['gamma_min'], config['gamma_max'], 7))
-    ax2.set_xlabel('Strength', fontsize=16)
-    ax2.set_ylabel(r'$\gamma$ (°)', fontsize=16)
-    ax2.set_title(r'Slice through $\alpha$ = {:4.0f}°'.format(model[0]), fontsize=16) 
+    ax2.set_xlabel('Strength', fontsize=14)
+    ax2.set_ylabel(r'$\gamma$ (°)',fontsize=14)
+    ax2.set_title(r'Slice through $\alpha$ = {:4.0f}°'.format(model[0]))
     ax2.tick_params(labelsize=16)
     
     ax3 = fig.add_subplot(133)
@@ -59,14 +59,14 @@ def plot_sections(Ensemble, model, config, err):
     aa, gg = np.meshgrid(a, g)
     CS3 = ax3.contour(aa, gg, slc, levels=clevels, colors='k')
     ax3.contour(aa, gg, slc, levels=[fcrit], linewidths=3., colors='k')
-    ax3.clabel(CS3, inline=True, fontsize=12)
+    ax3.clabel(CS3, inline=True)
     ax3.set_ylim([-180,180])
     ax3.set_yticks(np.linspace(config['gamma_min'], config['gamma_max'], 7))
     ax3.set_xlim([0,90])
     ax3.set_xticks(np.linspace(0,90,7))
-    ax3.set_xlabel(r'$\alpha$ (°)', fontsize=16)
-    ax3.set_ylabel(r'$\gamma$ (°)', fontsize=16)
-    ax3.set_title(f'Slice through strength = {model[2]:4.3f}', fontsize=16)
+    ax3.set_xlabel(r'$\alpha$ (°)',fontsize=14)
+    ax3.set_ylabel(r'$\gamma$ (°)',fontsize=14)
+    ax3.set_title(f'Slice through strength = {model[2]:4.3f}')
     ax3.tick_params(labelsize=16)
     
     #Add best model
@@ -75,10 +75,21 @@ def plot_sections(Ensemble, model, config, err):
     ax3.errorbar(a_int, g_int, fmt='bx', yerr=err[1], xerr=err[0], markersize=15)
     # fig.colorbar(C, ax=[ax1,ax2,ax3])
     fig.tight_layout()
+          
+    # SMALL_SIZE = 12
+    # MEDIUM_SIZE = 16
+    
+    # plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    # plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
+    # plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+    # plt.rc('xtick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    # plt.rc('ytick', labelsize=MEDIUM_SIZE)    # fontsize of the tick labels
+    # plt.rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure title
     
     return fig
 
 if __name__ == '__main__':
+
      # Add sample steps to Ensemble config
     samp_config = {'alpha_min': 0, 'alpha_max':90, 'alpha_step':1,
                    'gamma_min':-180, 'gamma_max':180, 'gamma_step': 2,

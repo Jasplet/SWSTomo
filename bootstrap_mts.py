@@ -119,6 +119,16 @@ def plot_all_cands_all_params(save=False):
     plt.show()
 if __name__ == '__main__':
     
+    SMALL_SIZE = 12
+    MEDIUM_SIZE = 14
+    
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=10)    # legend fontsize
+    plt.rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure title
     # outdir = f'{PATH}/Pathsets'
     # Setter = PathSetter(phasefile='/Users/ja17375/Projects/Epac_fast_anom/HQ_phases_on_fast_anom.sdb',
     # odir=outdir, model='/Users/ja17375/Projects/Epac_fast_anom/Models/EP_fast_anom_Model.xml')

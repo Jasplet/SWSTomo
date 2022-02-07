@@ -87,6 +87,16 @@ def predict_tt(evdp, dist, phase='ScS'):
 
 def plot_input_waveforms(paths):
     
+    SMALL_SIZE = 12
+    MEDIUM_SIZE = 14
+    
+    plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=SMALL_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=10)    # legend fontsize
+    plt.rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure title
     fig, axs = plt.subplots(nrows=6, ncols=2, figsize = (12,14))
     for i, path in paths.iterrows():
         if i <= 5:
@@ -112,7 +122,13 @@ def plot_input_waveforms(paths):
         datestring = evt.strftime('%Y-%m-%d %H:%M:%S')
         ax.set_title(f'Event {datestring}. Station {path.STAT}. Phase {path.PHASE}')
         ax.set_xlim([path.WBEG - 20, path.WEND + 20])
-        ax.legend(framealpha=0.75, loc=1)     
+        ymax = np.max([radial.max(), trans.max()])
+        ymin = np.min([radial.min(), trans.min()])
+        if path.STAT == '116A':
+            ax.set_ylim([4500,-4500])
+        else:
+            ax.set_ylim([ymin*1.3, ymax*1.2])
+        ax.legend(framealpha=0.75, loc=4)     
         ax.set_xlabel('Time (relative to event time) (s)')
         plt.tight_layout(w_pad=1.25)
         fig.savefig(f'{FIG_DIR}/HQ_input_waveform.eps',format='eps',dpi=500)
@@ -258,8 +274,8 @@ if __name__ == '__main__':
     #~/SWSTomo/Inversions/HQ_phases_NoIRON_fa_anom.sdb 
     paths = pd.read_csv('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/HQ_phases_on_fast_anom.sdb', delim_whitespace=True) 
    # sample_paths = paths[paths.STAT.isin(['COR','K20A','DAN'])]
-    plot_all_particle_motions(paths)
-  #  plot_input_waveforms(paths)
+   # plot_all_particle_motions(paths)
+    plot_input_waveforms(paths)
     #plot_ScS_waveform_test(paths)
         
     plt.show()
