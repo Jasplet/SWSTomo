@@ -16,7 +16,7 @@ from plot_models import draw_trigonal_doms
 from pathset import find_phases_in_domain
 from sphe_trig import vincenty_dist
 
-FIG_DIR = '/Users/ja17375/SWSTomo/Figures'
+FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures'
 THESIS_FIGS = '/Users/ja17375/Thesis-enclosing/Thesis/chapters/chapter02/Figs'
 def map_data_at_station(phasefile,station,extent=[-150,-100,30,70],save=False):
     '''
@@ -125,7 +125,7 @@ def map_data_tomo(data, region, draw_paths=False, fname=None):
     skks = hqdata[hqdata.PHASE == 'SKKS']
     
     fig = pygmt.Figure()
-    fig.basemap(region=region, projection='M15c', frame='a5')
+    fig.basemap(region=region, projection='M15c', frame=['a10','WESN'])
 
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
     s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
@@ -136,24 +136,31 @@ def map_data_tomo(data, region, draw_paths=False, fname=None):
     fig.coast(shorelines='1/0.5p,black', resolution='l')        
     # fig.plot(x=d1160_vlon,y=d1160_vlat,pen='2p,gray30,dashed')
     if draw_paths:
+
         for i, row in hqdata.iterrows():
             fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='0.75p,black')
+        
+        rays = pd.read_csv('~/Projects/Epac_fast_anom/HQ_data/HQ_phase_lmm_rays.txt',
+                           delim_whitespace=True)        
+        for i, ray in rays.iterrows():
+            fig.plot(x=[ray.Lon1, ray.Lon2], y=[ray.Lat1, ray.Lat2], pen='1p,red')
     else:
         print('Not adding paths')
     fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.2c', color='darkred', pen='1p,black')
     fig.plot(x=sks.LOWMM_LON, y=sks.LOWMM_LAT, style='c0.2c', color='green', pen='1p,black')
     fig.plot(x=skks.LOWMM_LON, y=skks.LOWMM_LAT, style='c0.2c', color='orange', pen='1p,black')
+
     fig.plot(x=hqdata.STLO,y=hqdata.STLA, style='i0.25c', color='red', pen='1p,black')
-    fig.text(x=hqdata.STLO + 0.5, y=hqdata.STLA + 0.5, text=hqdata.STAT)
+    #fig.text(x=hqdata.STLO + 0.5, y=hqdata.STLA + 0.5, text=hqdata.STAT)
     
-    print(hqdata)
     # fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
     if fname:
         fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
     else:
         fig.show(method='external')
   
-def map_data_paths(data, show_pp=False, add_tomo=False, fname=None):
+def map_data_paths(data, region=[119, 267, -12, 58], show_pp=False,
+                   add_tomo=False, add_roi=True, fname=None):
     ''' 
     Maps data used for inversion. Data that fits our 'high quality' threshold will be drawn on top and 
     the paths will be highlighted 
@@ -162,32 +169,46 @@ def map_data_paths(data, show_pp=False, add_tomo=False, fname=None):
     lqdata = data[~data.index.isin(hqdata.index)]
 
     fig = pygmt.Figure()
-    fig.basemap(region=[119, 267, -12, 58],
-                projection='B195/25/10/50/15c', frame=['a20','WESn'])
-    
+    fig.basemap(region=region,
+                projection='B-140/45/40/50/10c', frame=['a5','wesn'])
+    # Zoomed out projection is 'B195/25/10/50/10c'
+    # Zoomin proejction is B-140/45/40/50/10c
     if add_tomo:
-        add_s40rts(figs)
+        add_s40rts(fig)
+    
     
     fig.coast(shorelines='1/0.5p,black', resolution='l')
     for i, row in lqdata.iterrows():
-        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='1p,gray30')
+        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='0.75p,gray30')
     
     for i, row in hqdata.iterrows():
-        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='1p,darkgoldenrod1')
+        fig.plot(x=[row.EVLO, row.STLO], y=[row.EVLA, row.STLA],pen='0.75p,darkgoldenrod1')
     
     fig.plot(x=data.EVLO, y=data.EVLA, style='a0.25c', color='yellow', pen='0.5p,black')
     fig.plot(x=data.STLO, y=data.STLA, style='i0.25c', color='red', pen='0.5p,black')
-    
+
     
     if show_pp:
-        fig.plot(x=lqdata.LOWMM_LON, y=lqdata.LOWMM_LAT, style='c0.1c', color='gray30', pen='0.5p,black')
-        fig.plot(x=hqdata.LOWMM_LON, y=hqdata.LOWMM_LAT, style='c0.1c', color='darkgoldenrod1', pen='0.5p,black')
+        fig.plot(x=lqdata.LOWMM_LON, y=lqdata.LOWMM_LAT, style='c0.25c', color='gray30', pen='0.5p,black')
+        fig.plot(x=hqdata.LOWMM_LON, y=hqdata.LOWMM_LAT, style='c0.25c', color='darkgoldenrod1', pen='0.5p,black')
+
+    if add_roi:
+        fig.plot(x=[-150, -150, -130, -130, -150], y=[40, 50, 50, 40, 40], pen="1p,black")
 
     if fname:
-        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
+        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True, transparent=True)
     else:
         fig.show(method='external')
- 
+
+def fast_anom_phases(data):
+    '''
+    Plot phases on fast anom
+    '''    
+    fig = pygmt.Figure()
+    fig.basemap(region=[119, 267, -12, 58],
+                projection='B195/25/10/50/15c', frame=['a20','WESn'])
+    add_s40rts(fig)
+
 def add_s40rts(fig):
     ''' adds s40rts tomography and cpt to a PyGMT fig'''
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
@@ -273,17 +294,21 @@ if __name__ == '__main__':
     phasefile = 'All_phases.sdb'
     date_time_conv = {'TIME': lambda x: str(x),
                       'DATE': lambda x: str(x)}
-    filepath = f'/Users/ja17375/SWSTomo/Inversions/{phasefile}'
+    filepath = f'/Users/ja17375/Projects/Splitting_PhD/{phasefile}'
     data = pd.read_csv(filepath, converters=date_time_conv, delim_whitespace=True)
     clat = 46
     clon = -140.
     crit = 4.
     idx = []
-    # for i, row in data.iterrows():
-    #     if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
-    #         idx.append(i)
-    # data2plot = data.iloc[idx]
+    for i, row in data.iterrows():
+        if vincenty_dist(clat, clon, row.LOWMM_LAT, row.LOWMM_LON)[0] <= crit:
+            idx.append(i)
+    data2plot = data.iloc[idx]
                           
-    # map_data_paths(data2plot, show_pp=True, add_tomo=True, fname='data_paths_summary')
-   # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
-    global_phase_map(data)
+    # map_data_paths(data2plot, show_pp=True,
+    #                add_tomo=True, fname='data_paths_summary')
+    map_data_paths(data2plot, show_pp=True, region=[-150,-130, 40, 50],
+                   add_tomo=True, fname='data_paths_zoomin', add_roi=False)
+    # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
+    #map_data_tomo(data2plot,[-160, -100, 25, 55], draw_paths=True, fname='colour_path_test')
+    #global_phase_map(data)

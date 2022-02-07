@@ -12,14 +12,14 @@ from obspy.taup import TauPyModel
 from ak135 import ak135_original
 from scipy.interpolate import pchip_interpolate
 
-def get_rayparam(evdp,dist,ph):
+def get_rayparam(evdp,dist,phase):
     '''
     This function uses TauP (from obspy) to get the ray parameter for each phase to then get the aoi
     
     Args:
         evdp (float) - the event depth [km]
         dist (float) - the distance from source to reciever (for the whole path) [deg]
-        ph (str) - the phase code (SKS or SKKS)
+        phase (str) - the phase code (SKS or SKKS)
 
     Returns:
         rp (float) - the ray parameter for the given event
@@ -29,7 +29,7 @@ def get_rayparam(evdp,dist,ph):
             281.70596459588847
     '''
     model = TauPyModel('ak135')
-    arrival = model.get_travel_times(source_depth_in_km=evdp, distance_in_degree=dist, phase_list=[ph])
+    arrival = model.get_travel_times(source_depth_in_km=evdp, distance_in_degree=dist, phase_list=[phase])
     rp = arrival[0].ray_param # Rap paramter in s/rad
     return rp
 

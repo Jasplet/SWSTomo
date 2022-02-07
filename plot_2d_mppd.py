@@ -150,7 +150,7 @@ def plot_2d_mppd(P,XY,dp_x,dp_y,save=False,f_uid=None):
     ax_y.set_yticks(np.linspace(ymin, ymax, 13))
     ax_x.set_xlim(xlim)
     ax_y.set_ylim(ylim)
-    plt.colorbar(C,cax=ax_c)
+    plt.colorbar(C,cax=ax_c, aspect=20)
         
     #ax_main.plot(x[icol],y[irow],'xb',markersize=15)
     print(r'Most likely (maxima) points is $\gamma = ${}, $s = ${}'.format(y[irow],x[icol]))
