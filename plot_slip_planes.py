@@ -5,10 +5,10 @@ Created on Wed Mar 31 16:18:00 2021
 
 @author: ja17375
 """
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import mplstereonet
 FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures/Stereonets'
-def plot_stereonet(model, add_flow=False):
+def plot_stereonet(model, add_flow=False, add_secondary=False):
     
     fig, ax = mplstereonet.subplots(figsize=(3,3))
     ax.plane(model['gamma']+180, model['alpha'],'k')
@@ -37,5 +37,4 @@ if __name__ == '__main__':
     ppv010 = {'alpha':28.7, 'gamma':-14.6, 'title':'Post-perovskite [100](010)','file':'ppv_010_100'}
     for model in [ellip, br, ppv001, ppv010]:
         plot_stereonet(model)
-    # plot_stereonet(ellip)
     
