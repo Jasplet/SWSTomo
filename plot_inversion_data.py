@@ -21,7 +21,7 @@ from correct_waveforms import event_relative_time
 
 MODEL = 'EllipTI'
 #DATA_DIR = f'/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/{MODEL}/wavecorr/corrs'
-DATA_DIR = '/Users/ja17375/Projects/Epac_fast_anom/data'
+DATA_DIR = '/Users/ja17375/Projects/Epac_fast_anom/HQ_data/test'
 FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures'
 
 def read_path_as_pair(fstem, full_path=False, rotate=False):
@@ -98,6 +98,10 @@ def plot_input_waveforms(paths):
     plt.rc('legend', fontsize=10)    # legend fontsize
     plt.rc('figure', titlesize=MEDIUM_SIZE)  # fontsize of the figure title
     fig, axs = plt.subplots(nrows=6, ncols=2, figsize = (12,14))
+    # Predict traveltimes for potential interefering phases
+    phases = ['ScS', 'SKS', 'SKKS', 'SKiKS', 'Sdiff','pSKS', 'sSKS']
+    taup_model = TauPyModel()
+    
     for i, path in paths.iterrows():
         if i <= 5:
             ax = axs[i,0]
@@ -105,9 +109,12 @@ def plot_input_waveforms(paths):
             ax = axs[i-6,1]
 
         filename = f'{path.STAT}_{path.DATE}_*_{path.PHASE}'
+        #filename = f'{path.STAT}_wind_adjust'
         #filename = f'{path.STAT}_{path.DATE}_*corr.00000002'
         st = obspy.read(f'{DATA_DIR}/{filename}.BH?')  
         metadata = st[0].stats
+        wbeg = metadata.sac.a
+        wend = metadata.sac.f
        #Roate to RTZ
         baz = metadata.sac['baz']
         st.rotate('NE->RT', back_azimuth=baz)
@@ -117,17 +124,28 @@ def plot_input_waveforms(paths):
         ert, evt = event_relative_time(metadata)
         ax.plot(time+ert, trans, label= 'Transverse')
         ax.plot(time+ert, radial, label= 'Radial')
-        ax.axvline(path.WBEG, linewidth=1, color='k')
-        ax.axvline(path.WEND, linewidth=1, color='k')
+        ax.axvline(wbeg, linewidth=1, color='k')
+        ax.axvline(wend, linewidth=1, color='k')            
         datestring = evt.strftime('%Y-%m-%d %H:%M:%S')
         ax.set_title(f'Event {datestring}. Station {path.STAT}. Phase {path.PHASE}')
-        ax.set_xlim([path.WBEG - 20, path.WEND + 20])
+        ax.set_xlim([wbeg - 20, wend + 20])
         ymax = np.max([radial.max(), trans.max()])
         ymin = np.min([radial.min(), trans.min()])
         if path.STAT == '116A':
-            ax.set_ylim([4500,-4500])
+            ylims = np.array([-4500,4500])
         else:
-            ax.set_ylim([ymin*1.3, ymax*1.2])
+            ylims = np.array([ymin*1.3, ymax*1.2])
+        ax.set_ylim(ylims)
+        # Add predicited traveltimes
+        arrivals = taup_model.get_travel_times(source_depth_in_km=path.EVDP,
+                                          distance_in_degree=path.GCARC,
+                                          phase_list=phases)
+        for arrival in arrivals:
+            if (arrival.time > (path.WBEG-20)) and (arrival.time < (path.WEND+20)):
+                ax.axvline(arrival.time, linewidth=1, linestyle='--', color='k')
+                ax.annotate(arrival.name, (arrival.time-5, ylims[-1]*0.75))
+            else:
+                print(f'Skip {arrival.name} for {path.STAT} as its our of plotting range')
         ax.legend(framealpha=0.75, loc=4)     
         ax.set_xlabel('Time (relative to event time) (s)')
         plt.tight_layout(w_pad=1.25)
@@ -272,7 +290,7 @@ def plot_ScS_waveform_test(paths, bw=True):
 if __name__ == '__main__':
     
     #~/SWSTomo/Inversions/HQ_phases_NoIRON_fa_anom.sdb 
-    paths = pd.read_csv('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/HQ_phases_on_fast_anom.sdb', delim_whitespace=True) 
+    paths = pd.read_csv('/Users/ja17375/Projects/Epac_fast_anom/HQ_data/HQ_phases_on_fast_anom_wind_adjust.sdb', delim_whitespace=True) 
    # sample_paths = paths[paths.STAT.isin(['COR','K20A','DAN'])]
    # plot_all_particle_motions(paths)
     plot_input_waveforms(paths)
