@@ -5,7 +5,7 @@ Created on Wed Mar 31 16:18:00 2021
 
 @author: ja17375
 """
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import mplstereonet
 FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures/Stereonets'
 def plot_stereonet(model, add_flow=False, add_secondaries=False):
@@ -48,4 +48,3 @@ if __name__ == '__main__':
     for model in [ellip, br, ppv001, ppv010]:
         plot_stereonet(model, add_secondaries=model['flag'], add_flow=False)
     # plot_stereonet(ellip)
-    
