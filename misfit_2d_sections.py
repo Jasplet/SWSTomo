@@ -7,12 +7,26 @@ Created on Mon Mar  1 16:17:28 2021
 """
 import matplotlib.pyplot as plt
 import numpy as np
-from l2stats import ftest
+from scipy import stats 
 import resampler
 from EnsembleVisualiser import Ensemble
 
 FIG_DIR = '/Users/ja17375/Projects/Epac_fast_anom/Figures/ModelSlices/'
- 
+
+def ftest(lam2min,ndf,k=2,alpha=0.05):
+    """
+    returns lambda2 value at 100(1-alpha)% confidence interval
+    by default alpha = 0.05 = 95% confidence interval
+    following Silver and Chan (1991) [modifications by walsh et al., 2013]
+    As we are dealing with traces that have alreayd been passed through SHEBA,
+    we do not need to check (or calculate) degrees of freedom as this has alreay
+    been done.
+
+    Needed for pair_stack to calc lam2alpha for SKS and SKKS
+    """
+    F = stats.f.ppf(1-alpha,k,ndf)
+    lam2alpha = lam2min * ( 1 + (k/(ndf-k)) * F)
+    return lam2alpha 
 
 def plot_sections(Ensemble, model, config, err):
       
