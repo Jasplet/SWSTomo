@@ -20,27 +20,27 @@ def plot_nbest_models(Ensemble, n, full_range=False):
     (ax_3d) = fig1.axes[0]
     fig2 = plot_2d_views(models)
     (ax1, ax2, ax3, cbar) = fig2.get_axes()
-    
+    print(Ensemble.config)
     if full_range:
-        ax_3d.set_xlim([Ensemble.model_config['alpha_min'],
-                        Ensemble.model_config['alpha_max']])
-        ax_3d.set_ylim([Ensemble.model_config['gamma_min'],
-                        Ensemble.model_config['gamma_max']])
-        ax_3d.set_zlim([Ensemble.model_config['strength_min'],
-                        Ensemble.model_config['strength_max']])
+        ax_3d.set_xlim([Ensemble.config['alpha_min'],
+                        Ensemble.config['alpha_max']])
+        ax_3d.set_ylim([Ensemble.config['gamma_min'],
+                        Ensemble.config['gamma_max']])
+        ax_3d.set_zlim([Ensemble.config['strength_min'],
+                        Ensemble.config['strength_max']])
         
-        ax1.set_xlim([Ensemble.model_config['strength_min'],
-                      Ensemble.model_config['strength_max']])
-        ax1.set_ylim([Ensemble.model_config['alpha_min'],
-                  Ensemble.model_config['alpha_max']])
-        ax2.set_xlim([Ensemble.model_config['strength_min'],
-                  Ensemble.model_config['strength_max']])
-        ax2.set_ylim([Ensemble.model_config['gamma_min'],
-                  Ensemble.model_config['gamma_max']]) 
-        ax3.set_xlim([Ensemble.model_config['alpha_min'],
-          Ensemble.model_config['alpha_max']]) 
-        ax3.set_ylim([Ensemble.model_config['gamma_min'],
-          Ensemble.model_config['gamma_max']]) 
+        ax1.set_xlim([Ensemble.config['strength_min'],
+                      Ensemble.config['strength_max']])
+        ax1.set_ylim([Ensemble.config['alpha_min'],
+                  Ensemble.config['alpha_max']])
+        ax2.set_xlim([Ensemble.config['strength_min'],
+                  Ensemble.config['strength_max']])
+        ax2.set_ylim([Ensemble.config['gamma_min'],
+                  Ensemble.config['gamma_max']]) 
+        ax3.set_xlim([Ensemble.config['alpha_min'],
+          Ensemble.config['alpha_max']]) 
+        ax3.set_ylim([Ensemble.config['gamma_min'],
+          Ensemble.config['gamma_max']]) 
     # Add best fitting model to both figs
     best_model = Ensemble.find_best_fitting(ret=True)
     ax_3d.plot(xs=best_model.alpha, ys=best_model.gamma,
@@ -133,12 +133,12 @@ def plot_2d_sections(Ensemble, ndf, fname=None):
     fig.suptitle('2-D sections through model space, intersecting at best fitting model (+/- 0.1%)',
                  fontsize=14)
     fig.colorbar(C, ax=ax3)
-    ax1.set_xlim([Ensemble.model_config['strength_min'], Ensemble.model_config['strength_max']])
-    ax1.set_ylim([Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max']])
-    ax2.set_xlim([Ensemble.model_config['strength_min'], Ensemble.model_config['strength_max']])
-    ax2.set_ylim([Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']])
-    ax3.set_xlim([Ensemble.model_config['alpha_min'], Ensemble.model_config['alpha_max']])
-    ax3.set_ylim([Ensemble.model_config['gamma_min'], Ensemble.model_config['gamma_max']])
+    ax1.set_xlim([Ensemble.config['strength_min'], Ensemble.config['strength_max']])
+    ax1.set_ylim([Ensemble.config['alpha_min'], Ensemble.config['alpha_max']])
+    ax2.set_xlim([Ensemble.config['strength_min'], Ensemble.config['strength_max']])
+    ax2.set_ylim([Ensemble.config['gamma_min'], Ensemble.config['gamma_max']])
+    ax3.set_xlim([Ensemble.config['alpha_min'], Ensemble.config['alpha_max']])
+    ax3.set_ylim([Ensemble.config['gamma_min'], Ensemble.config['gamma_max']])
     if fname:
         plt.savefig(f'{FIG_DIR}/{fname}')
     else:
@@ -148,5 +148,6 @@ if __name__ == '__main__':
     
     E = EnsembleVisualiser.Ensemble('/Users/ja17375/SWSTomo/Inversions/Epac_fast_anom/Creasy_tensors/ppv2/SimpleShear_100',
                                            strmax=1)
+    ndf = 239
     m = E.find_best_fitting(ret=True)
-    plot_2d_sections(E, m)
+    plot_2d_sections(E, ndf)
