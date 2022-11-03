@@ -69,7 +69,7 @@ def plot_forte_gmt():
                       y=row['SKS_PP_LAT'],
                       style='c0.15c', color='black', pen='black')
             vec = np.array([[row['SKS_PP_LON'], row['SKS_PP_LAT'], row['FAST_SKS'], row['TLAG_SKS']*0.5],
-                    [row['SKS_PP_LON'], row['SKS_PP_LAT'], row['FAST_SKS']+180, row['TLAG_SKS']*0.5]])
+                            [row['SKS_PP_LON'], row['SKS_PP_LAT'], row['FAST_SKS']+180, row['TLAG_SKS']*0.5]])
             fig.plot(data=vec, style = 'v0c', color='black', pen='0.75p')
             
         elif (row['Q_SKS'] <= -0.5):

@@ -10,9 +10,9 @@ import matplotlib.pyplot as plt
 import pygmt
 import numpy as np
 import pandas as pd
-import cartopy.feature as cfeature 
-import cartopy.crs as ccrs
-from plot_models import draw_trigonal_doms
+# import cartopy.feature as cfeature 
+# import cartopy.crs as ccrs
+#from plot_models import draw_trigonal_doms
 from pathset import find_phases_in_domain
 from sphe_trig import vincenty_dist
 
@@ -155,7 +155,7 @@ def map_data_tomo(data, region, draw_paths=False, fname=None):
     
     # fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
     if fname:
-        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
+        fig.savefig(f'{FIG_DIR}/{fname}.eps',dpi=400, crop=True, show=True)
     else:
         fig.show(method='external')
   
@@ -307,8 +307,8 @@ if __name__ == '__main__':
                           
     # map_data_paths(data2plot, show_pp=True,
     #                add_tomo=True, fname='data_paths_summary')
-    map_data_paths(data2plot, show_pp=True, region=[-150,-130, 40, 50],
-                   add_tomo=True, fname='data_paths_zoomin', add_roi=False)
+    #map_data_paths(data2plot, show_pp=True, region=[-150,-130, 40, 50],
+     #              add_tomo=True, fname='data_paths_zoomin', add_roi=False)
     # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
-    #map_data_tomo(data2plot,[-160, -100, 25, 55], draw_paths=True, fname='colour_path_test')
+    map_data_tomo(data2plot,[-160, -100, 25, 55], draw_paths=True, fname='E_pac_paths_in_inversion')
     #global_phase_map(data)
