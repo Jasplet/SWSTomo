@@ -75,7 +75,7 @@ def plot_candidates(param='misfit'):
     axs.ravel()[3].set_xlabel(param.capitalize())
                                                             
     plt.tight_layout()
-    plt.savefig(f'/Users/ja17375/Projects/Epac_fast_anom/Candidate_models_bootstrapped_{param}_ScS_fix.png', dpi=400)
+    plt.savefig(f'/Users/ja17375/Projects/Epac_fast_anom/Candidate_models_bootstrapped_{param}_ScS_fix.eps', dpi=400)
     plt.show()
 
 def plot_all_cands_all_params(save=False):
