@@ -143,7 +143,7 @@ def map_data_tomo(data, region, draw_paths=False, fname=None):
         rays = pd.read_csv('~/Projects/Epac_fast_anom/HQ_data/HQ_phase_lmm_rays.txt',
                            delim_whitespace=True)        
         for i, ray in rays.iterrows():
-            fig.plot(x=[ray.Lon1, ray.Lon2], y=[ray.Lat1, ray.Lat2], pen='1p,red')
+            fig.plot(x=[ray.Lon1, ray.Lon2], y=[ray.Lat1, ray.Lat2], pen='2p,red')
     else:
         print('Not adding paths')
     fig.plot(x=scs.LOWMM_LON, y=scs.LOWMM_LAT, style='c0.2c', color='darkred', pen='1p,black')
@@ -155,7 +155,7 @@ def map_data_tomo(data, region, draw_paths=False, fname=None):
     
     # fig.plot(x=-140, y=46, style='x0.5c', color='black', pen='2p,black')
     if fname:
-        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True)
+        fig.savefig(f'{FIG_DIR}/{fname}.eps',crop=True, show=True)
     else:
         fig.show(method='external')
   
@@ -196,7 +196,7 @@ def map_data_paths(data, region=[119, 267, -12, 58], show_pp=False,
         fig.plot(x=[-150, -150, -130, -130, -150], y=[40, 50, 50, 40, 40], pen="1p,black")
 
     if fname:
-        fig.savefig(f'{FIG_DIR}/{fname}.png',crop=True, show=True, transparent=True)
+        fig.savefig(f'{FIG_DIR}/{fname}.png',dpi=720, crop=True, show=True, transparent=True)
     else:
         fig.show(method='external')
 
@@ -228,15 +228,15 @@ def map_s40rts(region=[0,360,-80,80]):
     Using pyGMT in place of Cartopy
     '''
     fig = pygmt.Figure()
-    fig.basemap(region='g', projection='Kf20c', frame='afg')  
+    fig.basemap(region=region, projection='M12c', frame=['a10', 'WESn'])  
     cpt = f'{FIG_DIR}/S40RTS/S40RTS.cpt'
     s40rts = f'{FIG_DIR}/S40RTS/S40RTS_2800km.grd'
     fig.grdimage(grid=s40rts, cmap=cpt)
-    fig.coast(shorelines='0.5p,black', resolution='c')
+    fig.coast(shorelines='0.5p,black', resolution='i')
     fig.colorbar(cmap=cpt,
         position='jBC+o0c/-1.5c/+w10c/0.4c+h+e+m',
         frame=['a1f0.5g0.25','x+l"dVs (%)"'])
-    #fig.savefig(f'{FIG_DIR}/E_pac_blank_S40RTS.png',crop=True, show=True)
+    fig.savefig(f'{FIG_DIR}/E_pac_blank_S40RTS.eps',crop=True, show=True)
     fig.show(method='external')
 
 def map_sks_corrections(data):
@@ -306,9 +306,10 @@ if __name__ == '__main__':
     data2plot = data.iloc[idx]
                           
     # map_data_paths(data2plot, show_pp=True,
-    #                add_tomo=True, fname='data_paths_summary')
+    #                 add_tomo=True, fname='data_paths_summary')
     map_data_paths(data2plot, show_pp=True, region=[-150,-130, 40, 50],
                    add_tomo=True, fname='data_paths_zoomin', add_roi=False)
-    # map_data_tomo(data2plot,[-150, -100, 25, 50], draw_paths=True, fname='paths_in_inversion_stat_labelled')
-    #map_data_tomo(data2plot,[-160, -100, 25, 55], draw_paths=True, fname='colour_path_test')
+    #map_data_tomo(data2plot,[-160, -100, 25, 52.5], draw_paths=True, fname='paths_in_inversion_stat_labelled')
+    #map_data_tomo(data2plot,[-160, -100, 25, 52.5], draw_paths=True, fname='paths_in_inversion')
     #global_phase_map(data)
+    #map_s40rts([-170, -80, 10, 60])
